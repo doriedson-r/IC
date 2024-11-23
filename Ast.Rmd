@@ -1,0 +1,609 @@
+---
+title: "Modelos de série temporais para o conjunto de dados da gasolina"
+author: "Doriedson Rodrigues N. Jr."
+date: "2024-11-02"
+output: 
+  pdf_document:
+    number_sections: true
+  html_document:
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warnings = FALSE,
+                      message = FALSE,
+                      fig.height = 5,
+                      fig.width = 7)
+
+```
+
+```{r Requisitos, include=FALSE}
+require(dplyr)
+require(lubridate)
+```
+
+```{r}
+# Function to check normality of residuals
+check_normality <- function(residuals) {
+  shapiro_test <- shapiro.test(residuals)
+  p_value <- shapiro_test$p.value
+  return(p_value > 0.05)
+}
+
+modelando = function(data, p_values=c(0:5), d_values=c(0:4), q_values=c(0:5)){
+  # Ajusta modelos com todas combinações de coeficientes disponibilizados.
+  # Também testa normalidade e estacionariedade de cada modelo.
+    
+  best_model <- NULL
+  best_aic <- Inf
+  
+  Result = data.frame(p=0,d=0,q=0,p_valor=0, p_estac=0, p_ind=0, AIC=0)
+  
+  for (p in p_values) {
+    for (d in d_values) {
+      for (q in q_values) {
+        #print(c(p,d,q))
+        
+        tryCatch({
+          #model <- arima(data, order = c(p, d, q), method="ML")
+          model = forecast::Arima(data, order = c(p,d,q))
+          shapiro_test <- shapiro.test(residuals(model))
+          adf = tseries::adf.test(residuals(model))
+          indep = Box.test(residuals(model), type="Ljung")
+          
+          p_estac = adf$p.value
+          p_norm <- shapiro_test$p.value
+          p_ind <- indep$p.value
+          
+          Result = rbind(Result, c(p,d,q,p_norm, p_estac, p_ind, AIC(model)))
+          
+          if (check_normality(model$residuals) && AIC(model) < best_aic) {
+            best_model <- model
+            best_aic <- AIC(model)
+          }
+        }, error = function(e) {
+          # Handle errors gracefully, e.g., print a warning message
+          warning("Error fitting ARIMA(", p, ", ", d, ", ", q, "): ", e$message)
+        })
+      }
+    }
+  }
+  Result <- Result[-1,]
+  
+  cat("\n\nOs maiores valores-p para o teste de Shapiro-Wilk:\n")
+  print(head(Result[order(Result$p_valor, decreasing = TRUE), ]))
+  cat("\n\nOs menores valores-p para o teste ADF:\n")
+  print(head(Result[order(Result$p_estac, decreasing = FALSE), ]))
+  
+  aux_normal = ifelse(Result$p_valor > 5/100,1,0)
+  cat("\n S-W: Valores-p maiores que 5% -->", sum(aux_normal))
+  
+  aux_estac = ifelse(Result$p_estac < 5/100,1,0)
+  cat("\n ADF: Valores-p menores que 5% -->", sum(aux_estac))
+  
+  aux_ind = ifelse(Result$p_ind > 5/100,1,0)
+  cat("\n Box-Ljung: Valores-p maiores que 5% -->", sum(aux_estac))
+  
+  return(Result)
+}
+```
+
+```{r DADOS, include=FALSE}
+dados3 = read.csv("/cloud/project/dados_completos.csv")
+
+dados3 = dados3[, -c(1, 2, 7)]
+
+aux = as.Date(dados3$Data.da.Coleta, format = "%d/%m/%Y")
+dados3$Data.da.Coleta <- aux
+
+aux = stringr::str_replace_all(dados3$Valor.de.Venda, ",", ".")
+dados3$Valor.de.Venda <-as.numeric(aux)
+
+aux = format(dados3$Data.da.Coleta, "%Y-%m")
+dados3$grupo <- aux
+rm(aux)
+
+cat("Base de dados com todas observações de Goiânia!")
+
+summary(dados3)
+
+# Somente gasolina
+dados3g = subset(dados3, dados3$Produto == "GASOLINA")
+rm(dados3)
+
+################################################################################
+```
+
+```{r SORTEIO}
+set.seed(2024)
+sorteados = dados3g %>% group_by(dados3g$Data.da.Coleta) %>% sample_n(size=1)
+
+#summary(sorteados)
+```
+
+Registro dos testes de normalidade e estacionariedade dos modelos de séries temporais para cada tipo de amostragem dos dados do preço da gasolina em Goiânia.
+
+- Teste A.D.F: Hipótese alternativa de estacionariedade;
+
+- Teste Shapiro-Wilk: Hipótese nula de normalidade.
+
+## Dados diários
+
+Tentativa de ajuste do conjunto de dados no qual foi sorteado uma observação para cada dia.
+
+```{r}
+summary(sorteados)
+```
+
+```{r, fig.dim=c(7,4)}
+serie = ts(sorteados$Valor.de.Venda)#, start = dados$Data.da.Coleta[1], frequency = NA)
+
+par(bg='#e3e1e1')
+ts.plot(serie, col=4, lwd=2, ylab="Preço", main="", xlab="")
+```
+
+```{r, fig.dim=c(7,4), fig.cap="F. autocorrelação parcial"}
+par(bg='#e3e1e1')
+
+# MA
+plot(acf(serie, plot=F, lag.max = 1000), ylim=c(-1,1), ylab="Valor FAC", main="")
+
+# AR
+plot(pacf(serie, plot=F), ylab="Valor FACP", main="")
+
+```
+
+```{r echo=TRUE}
+forecast::auto.arima(serie, stationary = TRUE)
+
+ar_ = forecast::Arima(serie, order=c(0, 0, 5))
+
+summary(ar_)
+
+ggplot2::autoplot(ar_)
+forecast::checkresiduals(ar_)
+
+# Estacionariedade
+tseries::adf.test(residuals(ar_))
+
+shapiro.test(residuals(ar_))
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+com_dados_diarios = modelando(sorteados$Valor.de.Venda)
+
+```
+
+Nenhum dos modelos conseguiu a normalidade.
+
+\newpage
+
+## Log dos Dados diários
+
+Aplicando transformação logarítmica nos valores.
+
+```{r, fig.dim=c(7,4)}
+# 
+serie = ts(log(sorteados$Valor.de.Venda))
+
+par(bg='#e3e1e1')
+ts.plot(serie, col=4, lwd=2, ylab="log(Preço)", main="", xlab="")
+
+```
+
+```{r eval=FALSE, fig.cap="F., fig.dim=c(7,4), include=FALSE}
+par(bg='#e3e1e1')
+
+# MA
+plot(acf(serie, plot=F, lag.max = 1000), ylim=c(-1,1), ylab="Valor FAC", main="")
+
+# AR
+plot(pacf(serie, plot=F), ylab="Valor FACP", lwd=2, main="")
+
+```
+
+```{r echo=TRUE}
+forecast::auto.arima(serie, stationary = TRUE)
+
+ar_5 = forecast::Arima(serie, order=c(0, 0, 5))
+
+summary(ar_5)
+
+ggplot2::autoplot(ar_5)
+forecast::checkresiduals(ar_5)
+
+AIC(ar_5)
+
+# Estacionariedade
+tseries::adf.test(residuals(ar_5))
+
+shapiro.test(residuals(ar_5))
+
+par(bg='#e3e1e1')
+par(mfrow=c(1,2))
+
+plot(0, 0, type="n", ann=FALSE, axes=FALSE)
+u <- par("usr") # The coordinates of the plot area
+rect(u[1], u[3], u[2], u[4], col="white", border=NA)
+
+# MA
+par(new=T)
+plot(acf(ar_5$residuals, plot=F, lag.max=70), ylim=c(-.1,1), ylab="FAC", main="")
+
+# AR
+#par(new=T)
+plot(pacf(ar_5$residuals, plot=F, lag.max=50), lwd=3, ylab="FACP", main="")
+```
+
+```{r}
+ar_3 = forecast::Arima(serie, order=c(0, 0, 3))
+
+summary(ar_3)
+
+ggplot2::autoplot(ar_3)
+forecast::checkresiduals(ar_3)
+
+AIC(ar_3)
+
+# Estacionariedade
+tseries::adf.test(residuals(ar_3))
+
+shapiro.test(residuals(ar_3))
+
+par(bg='#e3e1e1')
+par(mfrow=c(1,2))
+
+plot(0, 0, type="n", ann=FALSE, axes=FALSE)
+u <- par("usr") # The coordinates of the plot area
+rect(u[1], u[3], u[2], u[4], col="white", border=NA)
+
+# MA
+par(new=T)
+plot(acf(ar_3$residuals, plot=F, lag.max=70), ylim=c(-.1,1), ylab="FAC", main="")
+
+# AR
+#par(new=T)
+plot(pacf(ar_3$residuals, plot=F, lag.max=50), lwd=3, ylab="FACP", main="")
+```
+
+```{r}
+ar_2 = forecast::Arima(serie, order=c(0, 0, 2))
+
+summary(ar_2)
+
+ggplot2::autoplot(ar_2)
+forecast::checkresiduals(ar_2)
+
+AIC(ar_2)
+
+# Estacionariedade
+tseries::adf.test(residuals(ar_2))
+
+shapiro.test(residuals(ar_2))
+
+par(bg='#e3e1e1')
+par(mfrow=c(1,2))
+
+plot(0, 0, type="n", ann=FALSE, axes=FALSE)
+u <- par("usr") # The coordinates of the plot area
+rect(u[1], u[3], u[2], u[4], col="white", border=NA)
+
+# MA
+par(new=T)
+plot(acf(ar_2$residuals, plot=F, lag.max=70), ylim=c(-.1,1), ylab="FAC", main="")
+
+# AR
+#par(new=T)
+plot(pacf(ar_2$residuals, plot=F, lag.max=50), lwd=3, ylab="FACP", main="")
+
+```
+
+```{r}
+rmensal = qcc::qcc.groups(ar_5$residuals, sorteados$grupo)
+
+# No caso mensal, formam-se 142 grupos, FALTAM 2014-06 e 2020-09
+g1=qcc::qcc(rmensal, type="xbar")
+```
+
+```{r}
+# No caso mensal, formam-se 142 grupos, FALTAM 2014-06 e 2020-09
+g1=qcc::qcc(ar_5$residuals, type="xbar.one")
+
+aux = g1$violations$beyond.limits
+
+sorteados[c(sort(aux)), c(3, 4)]
+
+```
+
+```{r}
+g1 =  qcc::ewma(rmensal)
+```
+
+```{r}
+g1 = qcc::cusum(rmensal)
+```
+
+
+```{r AQUI, message=FALSE, warning=FALSE}
+com_dados_diarios = modelando(log(sorteados$Valor.de.Venda))
+
+com_dados_diarios[order(com_dados_diarios$p_valor, decreasing=T), ]
+
+subset(com_dados_diarios, p_estac < 5/100 & p_ind > 5/100)
+
+```
+
+\newpage
+
+## Recorte dos dados gerais
+
+A tentativa a seguir foi feita modificando os 'Dados diários', de forma que foram excluídos dados anteriores ao ano de 2018. O objetivo é verificar se a menor quantidade de observações reduz a autocorrelação, por exemplo.
+
+```{r}
+# O primeiro valor de 2018 aparece na linha 414 de sorteados
+recorte = 414
+dados = sorteados[recorte:1058, ]
+summary(dados)
+```
+
+```{r, fig.dim=c(7,4)}
+serie = ts(dados$Valor.de.Venda)#, start = dados$Data.da.Coleta[1], frequency = NA)
+
+par(bg='#e3e1e1')
+ts.plot(serie, col=4, lwd=2, ylab="Preço", main="", xlab="")
+```
+
+```{r, fig.dim=c(7,4), fig.cap="F. autocorrelação parcial"}
+par(bg='#e3e1e1')
+
+# MA
+plot(acf(serie, plot=F, lag.max = 1000), ylim=c(-1,1), ylab="Valor FAC", main="")
+
+# AR
+plot(pacf(serie, plot=F), ylab="Valor FACP", main="")
+
+```
+
+```{r echo=TRUE}
+forecast::auto.arima(serie, stationary = TRUE)
+
+ar_ = forecast::Arima(serie, order=c(2, 0, 0))
+
+summary(ar_)
+
+ggplot2::autoplot(ar_)
+forecast::checkresiduals(ar_)
+
+# Estacionariedade
+tseries::adf.test(residuals(ar_))
+
+shapiro.test(residuals(ar_))
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+conj_dados_aparados = modelando(dados$Valor.de.Venda)
+```
+
+Todos modelos possuem resíduos que rejeitam a hipótese nula de normalidade.
+
+\newpage
+
+## Recorte transformado
+
+```{r echo=TRUE, fig.dim=c(7,4)}
+b = MASS::boxcox(lm(dados$Valor.de.Venda ~ 1))
+
+lambda <- b$x[which.max(b$y)]
+lambda
+```
+
+```{r}
+bc_t = function(x, lambda){
+  vetor = (x**lambda-1)/lambda
+  return(vetor)
+}
+```
+
+```{r}
+valor_apos_bc = bc_t(dados$Valor.de.Venda, -1.63)
+
+hist(valor_apos_bc, col=3)
+```
+
+```{r, fig.dim=c(7,4)}
+serie = ts(valor_apos_bc)
+
+par(bg='#e3e1e1')
+ts.plot(serie, col=4, lwd=2, ylab="Preço transformado", main="", xlab="")
+```
+
+```{r, fig.dim=c(7,4), fig.cap="F. autocorrelação parcial"}
+par(bg='#e3e1e1')
+
+# MA
+plot(acf(serie, plot=F, lag.max = 1000), ylim=c(-1,1), ylab="Valor FAC", main="")
+
+# AR
+plot(pacf(serie, plot=F), ylab="Valor FACP", main="")
+
+```
+
+```{r}
+forecast::auto.arima(serie, stationary = TRUE)
+
+ar_ = forecast::Arima(serie, order=c(3, 0, 0))
+
+summary(ar_)
+
+ggplot2::autoplot(ar_)
+forecast::checkresiduals(ar_)
+
+# Estacionariedade
+tseries::adf.test(residuals(ar_))
+
+shapiro.test(residuals(ar_))
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+recorte_transf = modelando(valor_apos_bc)
+```
+
+\newpage
+
+## Dados agrupados em médias quinzenais
+
+```{r}
+dados3g = dados3g[order(dados3g$Data.da.Coleta),]
+
+todas_datas = sort(as.Date((unique(dados3g$Data.da.Coleta))))
+
+# Define 15-day intervals
+interval_length <- 15
+date_breaks <- seq(min(todas_datas), max(todas_datas), by = interval_length)
+
+# Group by 15-day intervals
+dados_quinzena <-  dados3g %>%
+  mutate(Quinzena = cut(Data.da.Coleta, breaks = date_breaks)) %>%
+  group_by(Quinzena) %>%
+  summarize(Media = mean(Valor.de.Venda))
+
+dados_quinzena$Quinzena <- as.Date(dados_quinzena$Quinzena)
+
+summary(dados_quinzena)
+
+```
+
+
+```{r, fig.dim=c(7,4)}
+serie = ts(dados_quinzena$Media)
+
+par(bg='#e3e1e1')
+ts.plot(serie, col=4, lwd=2, ylab="Preço médio por quinzena", main="", xlab="")
+```
+
+```{r, fig.dim=c(7,4), fig.cap="F. autocorrelação parcial"}
+par(bg='#e3e1e1')
+
+# MA
+plot(acf(serie, plot=F, lag.max = 1000), ylim=c(-1,1), ylab="Valor FAC", main="")
+
+# AR
+plot(pacf(serie, plot=F), ylab="Valor FACP", main="")
+
+```
+
+```{r}
+forecast::auto.arima(serie, stationary = TRUE)
+
+ar_ = forecast::Arima(serie, order=c(2, 0, 1))
+
+summary(ar_)
+
+ggplot2::autoplot(ar_)
+forecast::checkresiduals(ar_)
+
+# Estacionariedade
+tseries::adf.test(residuals(ar_))
+
+shapiro.test(residuals(ar_))
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+quinzenalmente = modelando(dados_quinzena$Media)
+```
+
+\newpage
+
+## Log dos dados agrupados
+
+```{r, fig.dim=c(7,4)}
+MASS::boxcox(lm(dados_quinzena$Media~1, data=dados_quinzena))
+```
+
+
+```{r, fig.dim=c(7,4)}
+serie = ts(log(dados_quinzena$Media))
+
+par(bg='#e3e1e1')
+ts.plot(serie, col=4, lwd=2, ylab="Log Preço médio quinzena", main="", xlab="")
+```
+
+```{r, fig.dim=c(7,4), fig.cap="F. autocorrelação parcial"}
+par(bg='#e3e1e1')
+
+# MA
+plot(acf(serie, plot=F, lag.max = 1000), ylim=c(-1,1), ylab="Valor FAC", main="")
+
+# AR
+plot(pacf(serie, plot=F), ylab="Valor FACP", main="")
+
+```
+
+```{r}
+forecast::auto.arima(serie, stationary = TRUE)
+
+ar_ = forecast::Arima(serie, order=c(0, 0, 2))
+
+summary(ar_)
+
+ggplot2::autoplot(ar_)
+forecast::checkresiduals(ar_)
+
+# Estacionariedade
+tseries::adf.test(residuals(ar_))
+
+shapiro.test(residuals(ar_))
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+teste_denovo = modelando(log(dados_quinzena$Media))
+```
+
+
+## Última
+
+```{r}
+dados3g = dados3g[order(dados3g$Data.da.Coleta), ]
+
+```
+
+```{r, fig.dim=c(7,4)}
+serie = ts(log(dados3g$Valor.de.Venda))
+               
+par(bg='#e3e1e1')
+ts.plot(serie, col=4, lwd=2, ylab="Log Preço", main="", xlab="")
+```
+
+```{r, fig.dim=c(7,4), fig.cap="F. autocorrelação parcial"}
+par(bg='#e3e1e1')
+
+# MA
+plot(acf(serie, plot=F, lag.max = 1000), ylim=c(-1,1), ylab="Valor FAC", main="")
+
+# AR
+plot(pacf(serie, plot=F), ylab="Valor FACP", main="")
+
+```
+
+```{r}
+forecast::auto.arima(serie, stationary = TRUE)
+
+ar_ = forecast::Arima(serie, order=c(0, 0, 5))
+
+summary(ar_)
+
+ggplot2::autoplot(ar_)
+forecast::checkresiduals(ar_)
+
+# Estacionariedade
+tseries::adf.test(residuals(ar_))
+
+shapiro.test(residuals(ar_))
+
+```

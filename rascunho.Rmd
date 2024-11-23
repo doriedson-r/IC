@@ -1,0 +1,234 @@
+---
+title: "Rascunho pra jogar no latex"
+author: "Doriedson"
+date: "2024-11-19"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+require(dplyr)
+```
+
+
+```{r DADOS, include=FALSE}
+caminho = "C:/Users/drnj2/academico/IC/dados_completos.csv"
+dados3 = read.csv(caminho)
+
+dados3 = dados3[, -c(1, 2, 7)]
+
+aux = as.Date(dados3$Data.da.Coleta, format = "%d/%m/%Y")
+dados3$Data.da.Coleta <- aux
+
+aux = stringr::str_replace_all(dados3$Valor.de.Venda, ",", ".")
+dados3$Valor.de.Venda <-as.numeric(aux)
+
+aux = format(dados3$Data.da.Coleta, "%Y-%m")
+dados3$grupo <- aux
+rm(aux)
+
+cat("Base de dados com todas observações de Goiânia!")
+
+summary(dados3)
+
+# Somente gasolina
+dados3g = subset(dados3, dados3$Produto == "GASOLINA")
+rm(dados3)
+
+################################################################################
+```
+
+```{r SORTEIO}
+set.seed(2024)
+sorteados = dados3g %>% group_by(dados3g$Data.da.Coleta) %>% sample_n(size=1)
+
+#summary(sorteados)
+```
+
+## Log dos Dados diários
+
+Aplicando transformação logarítmica nos valores.
+
+```{r, fig.dim=c(7,4)}
+# 
+serie = ts(log(sorteados$Valor.de.Venda))
+
+par(bg='#e3e1e1')
+ts.plot(serie, col=4, lwd=2, ylab="log(Preço)", main="", xlab="")
+
+```
+
+### AST
+
+```{r eval=FALSE, fig.cap="F.", fig.dim=c(7,4), include=FALSE}
+par(bg='#e3e1e1')
+
+# MA
+plot(acf(serie, plot=F, lag.max = 1000), ylim=c(-1,1), ylab="Valor FAC", main="")
+
+# AR
+plot(pacf(serie, plot=F), ylab="Valor FACP", lwd=2, main="")
+
+```
+
+```{r echo=TRUE}
+forecast::auto.arima(serie, stationary = TRUE)
+
+ar_5 = forecast::Arima(serie, order=c(0, 0, 5))
+
+summary(ar_5)
+
+ggplot2::autoplot(ar_5)
+forecast::checkresiduals(ar_5)
+
+AIC(ar_5)
+
+# Estacionariedade
+tseries::adf.test(residuals(ar_5))
+
+shapiro.test(residuals(ar_5))
+
+par(bg='#e3e1e1')
+par(mfrow=c(1,2))
+
+plot(0, 0, type="n", ann=FALSE, axes=FALSE)
+u <- par("usr") # The coordinates of the plot area
+rect(u[1], u[3], u[2], u[4], col="white", border=NA)
+
+# MA
+par(new=T)
+plot(acf(ar_5$residuals, plot=F, lag.max=70), ylim=c(-.1,1), ylab="FAC", main="")
+
+# AR
+#par(new=T)
+plot(pacf(ar_5$residuals, plot=F, lag.max=50), lwd=3, ylab="FACP", main="")
+```
+
+```{r}
+ar_3 = forecast::Arima(serie, order=c(0, 0, 3))
+
+summary(ar_3)
+
+ggplot2::autoplot(ar_3)
+forecast::checkresiduals(ar_3)
+
+AIC(ar_3)
+
+# Estacionariedade
+tseries::adf.test(residuals(ar_3))
+
+shapiro.test(residuals(ar_3))
+
+par(bg='#e3e1e1')
+par(mfrow=c(1,2))
+
+plot(0, 0, type="n", ann=FALSE, axes=FALSE)
+u <- par("usr") # The coordinates of the plot area
+rect(u[1], u[3], u[2], u[4], col="white", border=NA)
+
+# MA
+par(new=T)
+plot(acf(ar_3$residuals, plot=F, lag.max=70), ylim=c(-.1,1), ylab="FAC", main="")
+
+# AR
+#par(new=T)
+plot(pacf(ar_3$residuals, plot=F, lag.max=50), lwd=3, ylab="FACP", main="")
+```
+
+```{r}
+ar_2 = forecast::Arima(serie, order=c(0, 0, 2))
+
+summary(ar_2)
+
+ggplot2::autoplot(ar_2)
+forecast::checkresiduals(ar_2)
+
+AIC(ar_2)
+
+# Estacionariedade
+tseries::adf.test(residuals(ar_2))
+
+shapiro.test(residuals(ar_2))
+
+par(bg='#e3e1e1')
+par(mfrow=c(1,2))
+
+plot(0, 0, type="n", ann=FALSE, axes=FALSE)
+u <- par("usr") # The coordinates of the plot area
+rect(u[1], u[3], u[2], u[4], col="white", border=NA)
+
+# MA
+par(new=T)
+plot(acf(ar_2$residuals, plot=F, lag.max=70), ylim=c(-.1,1), ylab="FAC", main="")
+
+# AR
+#par(new=T)
+plot(pacf(ar_2$residuals, plot=F, lag.max=50), lwd=3, ylab="FACP", main="")
+
+```
+### Cartas
+
+```{r}
+rmensal = qcc::qcc.groups(ar_5$residuals, sorteados$grupo)
+
+# No caso mensal, formam-se 142 grupos, FALTAM 2014-06 e 2020-09
+g1=qcc::qcc(rmensal, type="xbar")
+```
+
+```{r}
+# No caso mensal, formam-se 142 grupos, FALTAM 2014-06 e 2020-09
+g1=qcc::qcc(ar_5$residuals, type="xbar.one")
+
+aux = g1$violations$beyond.limits
+
+sorteados[c(sort(aux)), c(3, 4)]
+
+
+# O ano de 2018 inicia em sorteados[414,]
+k = 414
+vetor = g1$limits
+c = g1$center
+zoom = ar_5$residuals[k:dim(sorteados[,1])]
+qcc::qcc(zoom, type="xbar.one",
+         center = c,
+         limits = as.vector(vetor))
+
+
+```
+
+```{r}
+k=10
+qicharts::qic(y=sorteados$Valor.de.Venda, x=sorteados$Data.da.Coleta,
+              #data=sorteados[, c(3, 4)],
+              runvals=T,
+              chart='xbar')
+
+```
+
+
+```{r}
+g1 =  qcc::ewma(rmensal)
+
+g1 = qcc::ewma(ar_5$residuals)
+
+g1$violations
+
+```
+
+```{r}
+g1 = qcc::cusum(rmensal)
+
+g1 = qcc::cusum(ar_5$residuals)
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+#com_dados_diarios = modelando(log(sorteados$Valor.de.Venda))
+
+```
+
