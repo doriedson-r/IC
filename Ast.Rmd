@@ -21,6 +21,7 @@ knitr::opts_chunk$set(echo = FALSE,
 ```{r Requisitos, include=FALSE}
 require(dplyr)
 require(lubridate)
+source("abrev.R")
 ```
 
 ```{r}
@@ -90,7 +91,7 @@ modelando = function(data, p_values=c(0:5), d_values=c(0:4), q_values=c(0:5)){
 ```
 
 ```{r DADOS, include=FALSE}
-dados3 = read.csv("/cloud/project/dados_completos.csv")
+dados3 = read.csv(dados_completos)
 
 dados3 = dados3[, -c(1, 2, 7)]
 
@@ -193,7 +194,7 @@ ts.plot(serie, col=4, lwd=2, ylab="log(Preço)", main="", xlab="")
 
 ```
 
-```{r eval=FALSE, fig.cap="F., fig.dim=c(7,4), include=FALSE}
+```{r eval=FALSE, fig.cap="F", fig.dim=c(7,4), include=FALSE}
 par(bg='#e3e1e1')
 
 # MA

@@ -13,11 +13,12 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 require(dplyr)
+source("abrev.R")
 ```
 
 
 ```{r DADOS, include=FALSE}
-caminho = "C:/Users/drnj2/academico/IC/dados_completos.csv"
+caminho = dados_completos
 dados3 = read.csv(caminho)
 
 dados3 = dados3[, -c(1, 2, 7)]
