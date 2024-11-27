@@ -592,7 +592,7 @@ plot(pacf(serie, plot=F), ylab="Valor FACP", main="")
 
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 forecast::auto.arima(serie, stationary = TRUE)
 
 ar_ = forecast::Arima(serie, order=c(0, 0, 5))

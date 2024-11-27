@@ -1,0 +1,19 @@
+---
+title: "Metodologia 1"
+author: "Doriedson"
+date: "2024-11-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+```
+
+![](images/IMG_20241125_010108.jpg)knitr::opts_chunk\$set(echo = TRUE)
+
+A pedido da Renata.
+
+```{r}
+
+```
+
