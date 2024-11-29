@@ -285,11 +285,11 @@ forecast::checkresiduals(ma_)
 ```
 
 ```{r}
-qcc::qcc(ma_$residuals, "xbar.one")
+g1 = qcc::qcc(ma_$residuals, "xbar.one")
 
-qcc::ewma(ma_$residuals)
+g1 = qcc::ewma(ma_$residuals)
 
-qcc::cusum(ma_$residuals)
+g1 = qcc::cusum(ma_$residuals)
 
 ```
 
