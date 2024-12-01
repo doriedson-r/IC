@@ -1,0 +1,134 @@
+---
+title: "Metodologia"
+author: "Doriedson"
+date: "2024-11-25"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE)
+
+```
+
+
+```{r, include=FALSE}
+library(lemon)
+knit_print.data.frame <- lemon_print
+
+```
+
+![](images/IMG_20241125_010108.jpg)
+
+_A pedido da Renata._
+
+## Os dados
+
+Retirados do livro _Métodos Estatísticos Aplicados ao Controle da Qualidade_ de José Ivo Júnior. Trata-se de observações individuais coletadas em 30 subgrupos racionais definidos por intervalos de tempo de 20 min, localizadas justamente no capítulo _Processo Autocorrelacionado_. 
+
+```{r render=lemon_print}
+y_i <- c(10.66,11.06,8.25,9.51,7.14,7.77,7.99,6.23,6.67,9.37,
+       9.27,9.45,8.20,9.46,9.71,9.56,11.65,12.18,9.75,8.93,
+       7.91,8.01,8.81,11.39,13.10,14.85,14.65,14.82,14.44,15.5)
+
+i <- seq(1, 30)
+
+dados = data.frame(cbind(i[1:10], y_i[1:10],
+                         i[11:20], y_i[11:20],
+                         i[21:30], y_i[21:30]))
+
+colnames(dados) <- rep(c('i', 'y_i'),3)
+
+dados
+
+```
+
+```{r, fig.cap="Funções de autocorrelação"}
+par(mfrow=c(1, 2))
+par(bg='gray')
+
+acf(y_i, lwd=2, ylab="AC", main="")
+pacf(y_i, lwd=2, ylab="AC Parcial", main="")
+
+#Box.test(y_i, type="Ljung")
+
+```
+
+O Gráfico 1 confirma a autocorrelação significativa no conjunto de dados.
+
+#### Tendência, sazonalidade e independência
+
+Para que uma série temporal esteja em ideais condições de ser objeto de um estudo de controle estatístico espera-se que os pressupostos sejam atendidos. Como visto no tópico acima, não há independência nos dados, tal fato tornará as cartas padrão - aplicadas aos dados originais - pouco confiáveis. Quanto a sazonalidade, não foi identificada; provavelmente por se tratar de uma amostra pequena com intervalo de poucos minutos.
+
+```{r, fig.cap="Observações ao longo do tempo"}
+serie = ts(y_i)
+
+par(bg='gray')
+plot(serie, col=4, lwd=2, xlab="Obs.", ylab="Valor")
+```
+
+
+```{r echo=TRUE}
+shapiro.test(y_i)
+
+```
+
+```{r, fig="Carta da média amostral", fig.dim=c(6,4)}
+g1 = qcc::qcc(y_i, type="xbar.one")
+```
+
+
+```{r, fig="Cartas MMEP", fig.dim=c(6,4)}
+g1 = qcc::ewma(y_i)
+
+```
+
+\newpage
+
+## Ajuste do modelo ARIMA
+
+O exercício do livro sugere o ajuste de um modelo AR(1), como visto a seguir, tal modelo realmente **engloba os pressupostos (normalidade, independência, estacionariedade) dos resíduos.**
+
+
+```{r echo=TRUE, fig.dim=c(6,4)}
+# Perguntas do livro
+
+serie = ts(y_i)
+
+ar1 = forecast::Arima(serie, order=c(1,0,0))
+
+forecast::checkresiduals(ar1)  
+
+tseries::adf.test(ar1$residuals)
+
+shapiro.test(ar1$residuals)
+
+# Após o ajuste dos dados por um modelo AR(1) será possível a aplicação das cartas
+# tradicionais. O resíduos do modelo possuem independência, estacionariedade e
+# normalidade.
+
+g1 = qcc::qcc(ar1$residuals, 'xbar.one')
+
+g1 = qcc::ewma(ar1$residuals)
+
+g1 = qcc::cusum(ar1$residuals)
+
+```
+
+Com base nas cartas obtidas para os resíduos do modelo AR(1), concluí-se que a abordagem com a série temporal apresentou resultados distintos daqueles vistos utilizando o conjunto original.
+
+#### Comprimento médio de sequência
+
+- Devido a suposição de independência, a probabilidade de que o deslocamento seja detectado na r-ésima amostra (subgrupo) é simplesmente $(1-\beta)$ vezes a probabilidade de não detecta-lo em cada uma das $r-1$ amostras iniciais.
+
+- O comprimento médio da sequência (CMS) é dado por $\frac{1}{p}$, onde p = probabilidade que um ponto exceda os limites de controle. Logo, teremos que
+
+$$CMS_0=\frac{1}{\alpha}$$ $$CMS_1=\frac{1}{1-\beta}$$
+Para as cartas padrão de Shewhart, limites $3\sigma$, 
+
+```{r}
+# Alfa
+(1-pnorm(3))*2
+```
+
