@@ -1,0 +1,26 @@
+---
+title: "Metodologia aplicada a dados simulados"
+author: "Doriedson"
+date: "2024-12-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r Requisitos, include=FALSE}
+require(dplyr)
+require(lubridate)
+
+source("abrev.R")
+
+```
+
+## Geração de dados
+
+```{r echo=TRUE}
+
+
+```
+

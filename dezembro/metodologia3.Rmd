@@ -1,0 +1,59 @@
+---
+title: "Observando postos"
+author: "Doriedson"
+date: "2024-12-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r Requisitos, include=FALSE}
+require(dplyr)
+#require(lubridate)
+source("C:\\Users\\drnj2\\academico\\IC\\abrev.R")
+
+```
+
+```{r DADOS, include=FALSE}
+dados3 = read.csv(dados_completos)
+
+dados3 = dados3[, -c(1, 2, 7)]
+
+aux = as.Date(dados3$Data.da.Coleta, format = "%d/%m/%Y")
+dados3$Data.da.Coleta <- aux
+
+aux = stringr::str_replace_all(dados3$Valor.de.Venda, ",", ".")
+dados3$Valor.de.Venda <-as.numeric(aux)
+
+aux = format(dados3$Data.da.Coleta, "%Y-%m")
+dados3$grupo <- aux
+rm(aux)
+
+#cat("Base de dados com todas observações de Goiânia!")
+#summary(dados3)
+
+# Somente gasolina
+dados3g = subset(dados3, dados3$Produto == "GASOLINA")
+rm(dados3)
+
+```
+
+## Tentativa 1
+
+**Dados de um posto revendedor, observados de 2018 a 2023.**
+
+```{r}
+dados = subset(dados3g,
+       dados3g$Revenda == "POSTO XODO LTDA" & dados3g$Data.da.Coleta >= "2017-12-31")
+
+summary(dados)
+```
+
+
+\newpage
+
+## Tentativa 2
+
+**Dados de um posto revendedor, observados de 2012 a 2023.**
