@@ -2,7 +2,9 @@
 title: "Metodologia aplicada a dados simulados"
 author: "Doriedson"
 date: "2024-12-10"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -10,17 +12,95 @@ knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r Requisitos, include=FALSE}
-require(dplyr)
-require(lubridate)
 
-source("abrev.R")
 
 ```
 
 ## Geração de dados
 
-```{r echo=TRUE}
+_Simples geração de dados via um modelo auto regressivo de ordem 1._
 
+```{r echo=TRUE}
+# Set parameters
+phi <- 0.8  # Autoregressive coefficient
+sigma <- 0.5  # Standard deviation of the noise term
+n <- 100     # Length of the time series
+
+# Generate the time series
+set.seed(2024)  # For reproducibility
+x <- numeric(n)
+x[1] <- rnorm(1, 0, sigma)  # Initial value
+
+for (t in 2:n) {
+  x[t] <- phi * x[t-1] + rnorm(1, 0, sigma)
+}
 
 ```
 
+
+```{r}
+#
+par(bg='gray')
+#par(mfrow=c(1, 2))
+
+#plot(x, type = "l", xlab = "Time", ylab = "Value", main = "AR(1) Time Series")
+
+serie = ts(x)
+plot(serie)
+
+```
+
+## 
+
+
+```{r}
+forecast::auto.arima(serie)
+
+```
+
+#### Tendência, sazonalidade e independência
+
+Para que uma série temporal esteja em ideais condições de ser objeto de um estudo de controle estatístico espera-se que os pressupostos sejam atendidos. Como visto no tópico acima, não há independência nos dados, tal fato tornará as cartas padrão - aplicadas aos dados originais - pouco confiáveis. Quanto a sazonalidade, não foi identificada; provavelmente por se tratar de uma amostra pequena com intervalo de poucos minutos.
+
+
+```{r echo=TRUE}
+shapiro.test(x)
+
+```
+
+```{r, fig="Carta da média amostral", fig.dim=c(6,4)}
+g1 = qcc::qcc(x, type="xbar.one")
+```
+
+
+```{r, fig="Cartas MMEP", fig.dim=c(6,4)}
+g1 = qcc::ewma(x)
+
+```
+
+\newpage
+
+## Ajuste do modelo ARIMA
+
+
+```{r echo=TRUE, fig.dim=c(6,4)}
+
+ar1 = forecast::Arima(serie, order=c(1,0,0))
+
+forecast::checkresiduals(ar1)  
+
+tseries::adf.test(ar1$residuals)
+
+shapiro.test(ar1$residuals)
+
+# Após o ajuste dos dados por um modelo AR(1) será possível a aplicação das cartas
+# tradicionais. O resíduos do modelo possuem independência, estacionariedade e
+# normalidade.
+
+g1 = qcc::qcc(ar1$residuals, 'xbar.one')
+
+g1 = qcc::ewma(ar1$residuals)
+
+g1 = qcc::cusum(ar1$residuals)
+
+```
