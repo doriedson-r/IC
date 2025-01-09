@@ -36,15 +36,15 @@ check_normality <- function(residuals) {
   return(p_value > 0.05)
 }
 
-modelando = function(data, p_values=c(0:5), d_values=c(0:4), q_values=c(0:5),
-                      P_values=c(0:5), D_values=c(0:4), Q_values=c(0:5)){
+modelando = function(data, p_values=c(0:5), d_values=c(0:3), q_values=c(0:5),
+                      P_values=c(0:5), D_values=c(0:3), Q_values=c(0:5)){
   # Ajusta modelos com todas combinações de coeficientes disponibilizados.
   # Também testa normalidade e estacionariedade de cada modelo.
-    
+  
   best_model <- NULL
   best_aic <- Inf
   
-  Result = data.frame(p=0,d=0,q=0,P,D,Q,
+  Result = data.frame(p=0, d=0, q=0, P=0, D=0, Q=0,
                       p_valor=0, p_estac=0, p_ind=0, AIC=0)
   
   for (p in p_values) {
@@ -67,7 +67,8 @@ modelando = function(data, p_values=c(0:5), d_values=c(0:4), q_values=c(0:5),
           p_norm <- shapiro_test$p.value
           p_ind <- indep$p.value
           
-          Result = rbind(Result, c(p,d,q,p_norm, p_estac, p_ind, AIC(model)))
+          Result = rbind(Result, c(p, d, q, P, D, Q, p_norm, p_estac,
+                                   p_ind, AIC(model)))
           
           if (check_normality(model$residuals) && AIC(model) < best_aic) {
             best_model <- model
@@ -257,6 +258,7 @@ dados_imput = dados_imput %>% group_by(mes) %>%
 ```{r}
 par(bg='gray')
 aux = unique(dados_imput[, c(3, 5)])[, 2]
+
 serie = ts(aux, start=c(2018, 1), frequency = 12)
 #serie = ts(dados_imput$media_mensal, start=c(2018, 1), end=c(2023, 12), frequency = 12)
 plot(serie, ylab="Valor", xlab="Obs.")
@@ -264,7 +266,10 @@ plot(serie, ylab="Valor", xlab="Obs.")
 ```
 
 ```{r}
-unique(dados_imput[, c(3, 5)])
+# Série FINAL
+
+#write.csv(unique(dados_imput[, c(3, 5)]), "serie_final.csv")
+
 
 ```
 
@@ -272,7 +277,7 @@ unique(dados_imput[, c(3, 5)])
 
 aux = forecast::auto.arima(serie)
 
-aux = forecast::Arima(serie, order = c(0,1,0), seasonal = c(1,1,1))
+aux = forecast::Arima(serie, order = c(0,0,0), seasonal = c(0,0,3))
 forecast::checkresiduals(aux)
 
 ```
@@ -292,15 +297,53 @@ Box.test(serie, type="Ljung-Box")
 par(bg='gray')
 autoplot(decompose(serie), main="Serie de precos da gasolina")
 
-forecast::ggseasonplot(serie)
 forecast::ggmonthplot(serie)
+
+```
+
+```{r }
+# Série Não estacionária
+tseries::adf.test(serie)
+
+```
+
+```{r}
+# Aplicando a primeira diferança na série
+dif1 = diff(serie)
+
+Box.test(dif1, type="Ljung")
+tseries::adf.test(dif1)
+
+```
+
+Após aplicar a primeira diferença, a série rejeitou evidências de autocorrelação, no entanto, continua não estacionária.
+
+```{r}
+acf(dif1)
+
+pacf(dif1)
+```
+
+
+```{r eval=FALSE, include=FALSE}
+mod1 = forecast::Arima(serie, order=c(0,1,0))
+#mod1 = forecast::Arima(serie, order=c(0,1,0), seasonal=c(0,1,0))
+
+forecast::checkresiduals(mod1)
+shapiro.test(mod1$residuals)
+tseries::adf.test(mod1$residuals)
+
+forecast::auto.arima(serie)
 
 ```
 
 
 ### SARIMA força bruta
 
-```{r}
+No arquivo `forca_bruta.R`.
+
+```{r, warning=FALSE, message=FALSE}
+#resultado = modelando(serie)
 
 ```
 

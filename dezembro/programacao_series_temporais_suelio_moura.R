@@ -137,34 +137,41 @@ autoplot(met_multiplicativo_ts_indicador_me_epp, main="Cobertura de atendimento 
 summary(met_multiplicativo_ts_indicador_me_epp)
 accuracy(met_multiplicativo_ts_indicador_me_epp)
 
-#Sendo assim, agora precisaremos o teste para avaliarmos a existência ou não da estacionariedade
+# Sendo assim, agora precisaremos o teste para avaliarmos a existência ou não da estacionariedade
 # Dickey Fuller Aumentado (ADF) - Teste da raíz unitária
 #Teste ADF para raiz unitária avaliando somente a Raiz unitária + constante (no R = drift)
 library(urca)
-require(urca)
-adf.drift <- ur.df(y = ts_indicador_me_epp_acumulado, type = c("drift"), lags = 24, selectlags = "AIC")
+#require(urca)
+adf.drift <- ur.df(y = ts_indicador_me_epp_acumulado, type = c("drift"),
+                   lags = 24, selectlags = "AIC")
 acf(adf.drift@res, lag.max = 36)
 
 summary(adf.drift)
 summary(adf.drift)@teststat #estatística do teste
 summary(adf.drift)@cval #valores críticos
 
-# Ao analisar a estatística de teste (-0.6805) notamos que seu valor é SUPERIOR ao valor crítico associado ao nível de confiança de 95% (-2.88);
+# Ao analisar a estatística de teste (-0.6805) notamos que seu valor é
+# SUPERIOR ao valor crítico associado ao nível de confiança de 95% (-2.88);
 
-#Dessa forma, conclui-se que a série temporal é NÃO estacionária (rejeição da hipótese nula).
+# Dessa forma, conclui-se que a série temporal é NÃO estacionária (rejeição da hipótese nula).
 
-#Diferenciação da ST IBC_Br
+# Diferenciação da ST IBC_Br
 adf.drift_2_diff <- diff(ts_indicador_me_epp_acumulado)
 lbdiff <- Box.test(adf.drift_2_diff,type="Ljung-Box")
 print(lbdiff)
 
-#CONCLUSÃO: p-valor (0.002323) é menor que 5%. Indício que a série é não estacionária, precisaremos, por exemplo, aplicarmos mais um diferença. O teste de Box-Ljung nos mostra ainda que os dados são autocorrelacionados
+#CONCLUSÃO: p-valor (0.002323) é menor que 5%. Indício que a série é não estacionária,
+#precisaremos, por exemplo, aplicarmos mais um diferença. O teste de Box-Ljung
+#nos mostra ainda que os dados são autocorrelacionados
 
 ndiffs(adf.drift_2_diff)#números de diferenças
 
 acf(adf.drift_2_diff, lag.max = 36)
 
-#Como a diferenciação é igual a ZERO, isso significa que mesmo aplicando outra diferença, a não estacionariedade não será resolvida. Assim, precisaremos de outros modelos para resolvermos a não estacionaridade (AR, MA, ARMA, ARIMA) e inclusive avaliar a existência da sazonalidade na série em estudo (SARIMA)
+#Como a diferenciação é igual a ZERO, isso significa que mesmo aplicando outra
+#diferença, a não estacionariedade não será resolvida. Assim, precisaremos de
+#outros modelos para resolvermos a não estacionaridade (AR, MA, ARMA, ARIMA)
+#e inclusive avaliar a existência da sazonalidade na série em estudo (SARIMA)
 
 #Modelando a série temporal
 #Os processos 𝐴𝑅(𝑝), 𝑀𝐴(𝑞), 𝐴𝑅𝑀𝐴(𝑝𝑑) e 𝐴𝑅I𝑀𝐴(𝑝d𝑑)
@@ -174,15 +181,23 @@ acf(adf.drift_2_diff, lag.max = 36)
 
 #Identificação
 layout(1:2)
-pacf(adf.drift_2_diff, lag.max = 36, main = "Função de Autocorelação Parcial para o indicador de cobertura de atendimento \n para (ME) mais (EPP) de dezembro de 2014 a agosto de 2024") # avalia o parâmetro associado ao AR(p), no gráfico contamos quantas informações estão fora do limite de significância
-acf(adf.drift_2_diff, lag.max = 36, main = "Função de Autocorelação para o indicador para o indicador de cobertura de atendimento \n para (ME) mais (EPP) de dezembro de 2014 a agosto de 2024") # avalia o parâmetro associado ao MA(q), no gráfico contamos a quantidade de parãmetros depois do zero
-
+pacf(adf.drift_2_diff, lag.max = 36,
+     main = "Função de Autocorelação Parcial para o indicador de cobertura de
+     atendimento \n para (ME) mais (EPP) de dezembro de 2014 a agosto de 2024") # avalia o parâmetro associado ao AR(p), no gráfico contamos quantas informações estão fora do limite de significância
+acf(adf.drift_2_diff, lag.max = 36,
+    main = "Função de Autocorelação para o indicador para o indicador de
+    cobertura de atendimento \n para (ME) mais (EPP) de dezembro de 2014 a
+    agosto de 2024") # avalia o parâmetro associado ao MA(q), no gráfico contamos a quantidade de parãmetros depois do zero
 
 #Estimação
 #modelo  SARIMA(1,1,1)(1,1,1)12
-#A diferença é que temos de diferenciar a série com respeito a delta e delta_12 (no nosso caso, estamos considerando só séries mensaais com períod s=12), a fim de produzir estacionariedade. Com isto, obtos valores para d e D que, na maioria das vezes, assumem valores no máximo iguais a 2. 
+#A diferença é que temos de diferenciar a série com respeito a delta e delta_12
+#(no nosso caso, estamos considerando só séries mensais com períod s=12),
+#a fim de produzir estacionariedade. Com isto, obtos valores para d e D que,
+#na maioria das vezes, assumem valores no máximo iguais a 2.
 library("forecast")
-fit.air <- Arima(ts_indicador_me_epp_acumulado, order = c(3,1,3), seasonal = c(3,1,3), method = "ML", lambda = 0) #CSS (Conditional Sum of Squares)
+fit.air <- Arima(ts_indicador_me_epp_acumulado, order = c(3,1,3),
+                 seasonal = c(3,1,3), method = "ML", lambda = 0) #CSS (Conditional Sum of Squares)
 summary(fit.air)
 checkresiduals(fit.air)
 AIC(fit.air)
@@ -202,7 +217,9 @@ t.test <- function(modelo_arima){
 t.test(fit.air)
 
 
-fit.air01 <- Arima(ts_indicador_me_epp_acumulado, order = c(1,1,0), seasonal = c(0,1,0), method = "ML", lambda = 0) #CSS (Conditional Sum of Squares)
+fit.air01 <- Arima(ts_indicador_me_epp_acumulado,
+                   order = c(1,1,0), seasonal = c(0,1,0), method = "ML",
+                   lambda = 0) #CSS (Conditional Sum of Squares)
 summary(fit.air01)
 checkresiduals(fit.air01)
 t.test(fit.air01)
