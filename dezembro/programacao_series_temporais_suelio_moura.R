@@ -231,7 +231,9 @@ diag <- tsdiag(fit.air01, gof.lag = 20)
 
 require(forecast)
 prev01 <- forecast(object = fit.air01, h=16, level = 0.95) #h=16, corresponde um ano e 4 meses de predição
-autoplot(prev01, main = "Modelo Forecasts SARIMA(1,1,0)(0,1,0)12 para o indicador de cobertura de atendimento para (ME) mais (EPP) de set/2024 a dez/2025", ylab = "Cobertura de atendimento para (ME) mais (EPP)", xlab = "Tempo")
+autoplot(prev01, main = "Modelo Forecasts SARIMA(1,1,0)(0,1,0)12 para o indicador
+         de cobertura de atendimento para (ME) mais (EPP) de set/2024 a dez/2025",
+         ylab = "Cobertura de atendimento para (ME) mais (EPP)", xlab = "Tempo")
 accuracy(fit.air01) #ou podemos chamar pelo objeto armazenado
 accuracy(prev01)
 #Analisando o MAPE, por exemplo, que é uma medida percentual do módulo dos erros;
@@ -239,10 +241,14 @@ accuracy(prev01)
 
 prev01
 layout(1:1)
-plot(prev01, main = "Modelo Forecasts SARIMA(1,1,0)(0,1,0)12 para o indicador de cobertura de atendimento para (ME) mais (EPP) de set/2024 a dez/2025", ylab = "Cobertura de atendimento para (ME) mais (EPP)", xlab = "Tempo")
+plot(prev01,
+     main = "Modelo Forecasts SARIMA(1,1,0)(0,1,0)12 para o indicador de
+     cobertura de atendimento para (ME) mais (EPP) de set/2024 a dez/2025",
+     ylab = "Cobertura de atendimento para (ME) mais (EPP)", xlab = "Tempo")
 
 ## Omelhor dos melhores modelos, mas as predições são bem altas
-best_model <- auto.arima(ts_indicador_me_epp_acumulado, lambda = 0, method = "ML", seasonal = TRUE)
+best_model <- auto.arima(ts_indicador_me_epp_acumulado, lambda = 0,
+                         method = "ML", seasonal = TRUE)
 
 # Ver o resumo do melhor modelo
 summary(best_model)
@@ -255,7 +261,10 @@ diag <- tsdiag(best_model, gof.lag = 20)
 
 require(forecast)
 prev01 <- forecast(object = best_model, h=16, level = 0.95) #h=16, corresponde um ano e 4 meses de predição
-autoplot(prev01, main = "Modelo Forecasts SARIMA(0,2,2)(0,0,1)12 para o indicador de cobertura de atendimento para (ME) mais (EPP) de set/2024 a dez/2025", ylab = "Cobertura de atendimento para (ME) mais (EPP)", xlab = "Tempo")
+autoplot(prev01,
+         main = "Modelo Forecasts SARIMA(0,2,2)(0,0,1)12 para o indicador de
+         cobertura de atendimento para (ME) mais (EPP) de set/2024 a dez/2025",
+         ylab = "Cobertura de atendimento para (ME) mais (EPP)", xlab = "Tempo")
 accuracy(best_model) #ou podemos chamar pelo objeto armazenado
 accuracy(prev01)
 #Analisando o MAPE, por exemplo, que é uma medida percentual do módulo dos erros;
@@ -263,7 +272,10 @@ accuracy(prev01)
 
 prev01
 layout(1:1)
-plot(prev01, main = "Modelo Forecasts SARIMA(0,2,2)(0,0,1)12 para o indicador de cobertura de atendimento para (ME) mais (EPP) de set/2024 a dez/2025", ylab = "Cobertura de atendimento para (ME) mais (EPP)", xlab = "Tempo")
+plot(prev01,
+     main = "Modelo Forecasts SARIMA(0,2,2)(0,0,1)12 para o indicador de
+     cobertura de atendimento para (ME) mais (EPP) de set/2024 a dez/2025",
+     ylab = "Cobertura de atendimento para (ME) mais (EPP)", xlab = "Tempo")
 dataset01 <- prev01$residuals
 View(dataset01)
 library(openxlsx)
