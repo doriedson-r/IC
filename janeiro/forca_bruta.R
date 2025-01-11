@@ -126,4 +126,4 @@ lendo_escrevendo = function(dados=read.csv(serie_final),
             #file = paste0("escrita_de", linha_inicial, "a", linha_final, ".csv"))
 }
 
-lendo_escrevendo(linha_inicial =  5501, linha_final = 7000)
+lendo_escrevendo(linha_inicial =  7001, linha_final = 10000)
