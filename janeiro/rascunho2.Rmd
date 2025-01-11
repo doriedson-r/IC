@@ -1,0 +1,295 @@
+---
+title: "CEQ para dados autocorrelacinados"
+author: "Doriedson Rodrigues N. Jr."
+date: "11-01-2025"
+output:
+  html_document:
+    number_sections: true
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warnings = FALSE,
+                      message = FALSE,
+                      fig.height = 5,
+                      fig.width = 7)
+
+```
+
+```{r Requisitos, include=FALSE}
+require(dplyr)
+require(lubridate)
+require(ggplot2)
+
+source('C:\\Users\\drnj2\\academico\\IC\\abrev.R')
+
+```
+
+```{r funcs}
+# Fazer as modificações para atender o sarima
+
+# Function to check normality of residuals
+check_normality <- function(residuals) {
+  shapiro_test <- shapiro.test(residuals)
+  p_value <- shapiro_test$p.value
+  return(p_value > 0.05)
+}
+
+modelando = function(data, p_values=c(0:5), d_values=c(0:3), q_values=c(0:5),
+                      P_values=c(0:5), D_values=c(0:3), Q_values=c(0:5)){
+  # Ajusta modelos com todas combinações de coeficientes disponibilizados.
+  # Também testa normalidade e estacionariedade de cada modelo.
+  
+  best_model <- NULL
+  best_aic <- Inf
+  
+  Result = data.frame(p=0, d=0, q=0, P=0, D=0, Q=0,
+                      p_valor=0, p_estac=0, p_ind=0, AIC=0)
+  
+  for (p in p_values) {
+    for (d in d_values) {
+      for (q in q_values) {
+        for (P in P_values) {
+          for (D in D_values) {
+            for (Q in Q_values) {
+        
+        #print(c(p,d,q))
+        
+        tryCatch({
+          #model <- arima(data, order = c(p, d, q), method="ML")
+          model = forecast::Arima(data, order = c(p,d,q), seasonal = c(P,D,Q))
+          shapiro_test <- shapiro.test(residuals(model))
+          adf = tseries::adf.test(residuals(model))
+          indep = Box.test(residuals(model), type="Ljung")
+          
+          p_estac = adf$p.value
+          p_norm <- shapiro_test$p.value
+          p_ind <- indep$p.value
+          
+          Result = rbind(Result, c(p, d, q, P, D, Q, p_norm, p_estac,
+                                   p_ind, AIC(model)))
+          
+          if (check_normality(model$residuals) && AIC(model) < best_aic) {
+            best_model <- model
+            best_aic <- AIC(model)
+          }
+        }, error = function(e) {
+          # Handle errors gracefully, e.g., print a warning message
+          warning("Error fitting ARIMA(", p, ", ", d, ", ", q, "): ", e$message)
+        })
+            }
+          }
+        }
+      }
+    }
+  }
+  Result <- Result[-1,]
+  
+  #cat("\n\nOs maiores valores-p para o teste de Shapiro-Wilk:\n")
+  #print(head(Result[order(Result$p_valor, decreasing = TRUE), ]))
+  #cat("\n\nOs menores valores-p para o teste ADF:\n")
+  #print(head(Result[order(Result$p_estac, decreasing = FALSE), ]))
+  
+  aux_normal = ifelse(Result$p_valor > 5/100,1,0)
+  cat("\n Shapiro-Wilk: Valores-p maiores que 5% -->", sum(aux_normal))
+  
+  aux_estac = ifelse(Result$p_estac < 5/100,1,0)
+  cat("\n ADF: Valores-p menores que 5% -->", sum(aux_estac))
+  
+  aux_ind = ifelse(Result$p_ind > 5/100,1,0)
+  cat("\n Box-Ljung: Valores-p maiores que 5% -->", sum(aux_estac))
+  
+  return(Result)
+}
+
+```
+
+### Resumo
+
+-   Período: 2018 a 2023;
+-   Posto X;
+-   Quantidade de observações iniciais: 365
+-   Método de agrupamento: **média mensal**;
+-   Quantidade de observações finais: 72;
+-   Imputação de dados na observação dos meses listados abaixo foi feita a partir da média daquele ano;
+-   Tentativa de ajuste com um modelo SARIMA;
+
+A partir da base de dados dos preços de combustíveis na cidade de Goiânia, será feita a filtragem listada acima. Foi selecionado um **único** posto revendedor - o posto com maior número de observações no período citado - contendo 365 valores divididos em 188 datas distintas; a seguir, foi tomada a média de cada mês essa será a variável estudada; foi feito a **imputação** de valores a três meses que não possuíam dados (nov-2018, dez-2018, fev-2019, set-2020, fev-2023) por meio da média dos seus respectivos anos; por fim,
+
+\newpage
+
+### Organização dos dados
+
+```{r funcs 2}
+contar_mensal = function(v){
+  # Recebe um vetor de dias, no formato 'YYYY-MM-DD' e verifica se algum dos
+  # meses não está incluso.
+  
+  df = as.data.frame(v)
+  colnames(df) <- "dia"
+  df = cbind(df, format(df$dia, "%Y-%m"))
+  colnames(df) <- c("dia", "grupo")
+}
+
+check_missing_months <- function(df, date_col) {
+  # Extract year and month from the date column
+  df <- df %>%
+    mutate(year_month = format(as.Date(!!sym(date_col)), "%Y-%m")) %>%
+    distinct(year_month)
+  
+  # Generate a sequence of all months between the min and max dates
+  all_months <- seq.Date(from = as.Date(paste0(min(df$year_month), "-01")),
+                         to = as.Date(paste0(max(df$year_month), "-01")),
+                         by = "month") %>%
+    format("%Y-%m")
+  
+  # Identify missing months
+  missing_months <- setdiff(all_months, df$year_month)
+  
+  print(length(missing_months))
+  
+  return(missing_months)
+}
+
+```
+
+```{r dados}
+dados3 = read.csv(dados_completos)
+
+# Removendo colunas não importantes
+dados3 = dados3[, -c(1, 2, 7)]
+
+# Formatando datas
+aux = as.Date(dados3$Data.da.Coleta, format = "%d/%m/%Y")
+dados3$Data.da.Coleta <- aux
+
+# Substituição de virgulas nos preços
+aux = stringr::str_replace_all(dados3$Valor.de.Venda, ",", ".")
+dados3$Valor.de.Venda <-as.numeric(aux)
+
+# Agrupamento mensal e anual
+aux = format(dados3$Data.da.Coleta, "%Y-%m")
+dados3$mes <- aux
+aux = format(dados3$Data.da.Coleta, "%Y")
+dados3$ano <- aux
+rm(aux)
+
+# Retirando todos combustíveis, exceto gasolina
+dados3g = subset(dados3, dados3$Produto == "GASOLINA")
+rm(dados3)
+
+```
+
+```{r Tratamento dos dados}
+# Contando a partir de 2018
+dados = subset(dados3g, dados3g$Data.da.Coleta >= "2018-01-01")
+
+# Separando o posto X
+aux = table(dados$Revenda)
+
+# POSTO XODO LTDA
+# HIPER MOREIRA AUTO POSTO LTDA
+# VIENA AUTO POSTO EIRELI
+
+dados = subset(dados3g, dados3g$Revenda == "POSTO XODO LTDA" &
+                 dados3g$Data.da.Coleta >= "2018-01-01")
+
+dados = dados[, -c(1,2)]
+
+head(dados)
+
+summary(dados)
+
+```
+
+```{r}
+# Meses faltantes
+m <- check_missing_months(dados, "Data.da.Coleta")
+print(m)
+
+# xodo: 5 faltas "2018-11" "2018-12" "2019-02" "2020-09" "2023-02"
+# hiper moreira: 18 faltas
+# viena: 5
+# Monaco: 4
+
+```
+
+![](images\freq.png)
+
+```{r imputar}
+# Calculando médias anuais
+aux = dados %>% group_by(ano) %>% mutate(media_anual = mean(Valor.de.Venda))
+unique(aux[, c(4, 5)])
+
+# "2018-11" "2018-12" "2019-02" "2020-09" "2023-02"
+# Adicionar os seguintes valores
+linha1 = data.frame(matrix(c("2018-11-01", 4.661141, "2018-11", "2018",
+                             "2018-12-01", 4.661141, "2018-12", "2018",
+                             "2019-02-01", 4.665063, "2019-02", "2019",
+                             "2020-09-01", 4.460714, "2020-09", "2020",
+                             "2023-02-01", 5.702877, "2023-02", "2023"),
+                           byrow= T, ncol=4))
+colnames(linha1) <- colnames(dados)
+
+linha1[, 1] <- as.Date.character(linha1[, 1])
+linha1[, 2] <- as.numeric(linha1[, 2])
+
+```
+
+```{r}
+# Adicionando valores ao conjunto de dados (completando)
+dados_imput = rbind(dados[, ], linha1)
+dados_imput = dados_imput[order(dados_imput$Data.da.Coleta), ]
+
+dados_imput %>% group_by(mes) %>% mutate(media_mensal = mean(Valor.de.Venda)) %>%
+  ggplot(aes(y = media_mensal, x = Data.da.Coleta)) +
+  geom_point()
+
+dados_imput = dados_imput %>% group_by(mes) %>%
+  mutate(media_mensal = mean(Valor.de.Venda))
+
+```
+
+### Série temporal
+
+```{r}
+par(bg='gray')
+aux = unique(dados_imput[, c(3, 5)])[, 2]
+
+serie = ts(aux, start=c(2018, 1), frequency = 12)
+#serie = ts(dados_imput$media_mensal, start=c(2018, 1), end=c(2023, 12), frequency = 12)
+plot(serie, ylab="Valor", xlab="Obs.")
+
+```
+
+```{r eval=FALSE, include=FALSE}
+# Série FINAL
+
+#write.csv(unique(dados_imput[, c(3, 5)]), "serie_final.csv")
+
+```
+
+### Modelo ARIMA
+
+Após toda organização do conjunto de dados, foram testados diversos modelos SARIMA. A seguir há uma relação dos modelos que apresentaram resíduos com: **normalidade**, **estacionariedade** e **independência.**
+
+```{r}
+modelos = read.table("escrita_.csv")
+
+colnames(modelos) <- c('x', 'p', 'd', 'q','P', 'D', 'Q', 'p_norm', 'p_estac',
+                     'p_ind', 'AIC.model')
+
+bons = subset(modelos, p_norm > 5/100 & p_estac < 5/100 & p_ind > 5/100)
+bons[order(bons$AIC.model), ]
+
+```
+
+
+```{r eval=FALSE, include=FALSE}
+#aux = forecast::auto.arima(serie)
+
+ar = forecast::Arima(serie, order = c(0,0,0), seasonal = c(0,0,0))
+forecast::checkresiduals(ar)
+
+```

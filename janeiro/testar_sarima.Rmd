@@ -107,16 +107,12 @@ modelando = function(data, p_values=c(0:5), d_values=c(0:3), q_values=c(0:5),
 
 ### Resumo
 
-```{r}
-# Particulamente, não havia tentado o modelo SARIMA por ter pouca prática com o mesmo.
-```
-
 -   Período: 2018 a 2023;
 -   Posto X;
--   Quantidade de observações iniciais: `VERIFICAR E COLOCAR AQUI`
+-   Quantidade de observações iniciais: 365
 -   Método de agrupamento: **média mensal**;
--   Quantidade de observações finais;
--   Imputação de dados na observação de , sendo a da média daquele ano;
+-   Quantidade de observações finais: 72;
+-   Imputação de dados na observação dos meses listados abaixo foi feita a partir da média daquele ano;
 -   Tentativa de ajuste com um modelo SARIMA;
 
 A partir da base de dados dos preços de combustíveis na cidade de Goiânia, será feita a filtragem listada acima. Foi selecionado um **único** posto revendedor - o posto com maior número de observações no período citado - contendo 365 valores divididos em 188 datas distintas; a seguir, foi tomada a média de cada mês essa será a variável estudada; foi feito a **imputação** de valores a três meses que não possuíam dados (nov-2018, dez-2018, fev-2019, set-2020, fev-2023) por meio da média dos seus respectivos anos; por fim,
