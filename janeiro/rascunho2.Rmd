@@ -121,8 +121,10 @@ A partir da base de dados dos preços de combustíveis na cidade de Goiânia, se
 
 ### Organização dos dados
 
+#### Antes
+
 ```{r funcs 2}
-contar_mensal = function(v){
+contar_mensal = function(v) {
   # Recebe um vetor de dias, no formato 'YYYY-MM-DD' e verifica se algum dos
   # meses não está incluso.
   
@@ -203,6 +205,13 @@ summary(dados)
 
 ```
 
+
+```{r}
+# plotar as observaçoes soltas!
+```
+
+#### Depois
+
 ```{r}
 # Meses faltantes
 m <- check_missing_months(dados, "Data.da.Coleta")
@@ -220,6 +229,7 @@ print(m)
 ```{r imputar}
 # Calculando médias anuais
 aux = dados %>% group_by(ano) %>% mutate(media_anual = mean(Valor.de.Venda))
+
 unique(aux[, c(4, 5)])
 
 # "2018-11" "2018-12" "2019-02" "2020-09" "2023-02"
@@ -289,7 +299,9 @@ bons[order(bons$AIC.model), ]
 ```{r eval=FALSE, include=FALSE}
 #aux = forecast::auto.arima(serie)
 
-ar = forecast::Arima(serie, order = c(0,0,0), seasonal = c(0,0,0))
+ar = forecast::Arima(serie, order = c(2, 3, 0), seasonal = c(0,0,0))
 forecast::checkresiduals(ar)
 
 ```
+
+
