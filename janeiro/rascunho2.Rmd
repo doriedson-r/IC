@@ -277,11 +277,12 @@ dados_imput = rbind(dados[, ], linha1)
 dados_imput = dados_imput[order(dados_imput$Data.da.Coleta), ]
 
 g1 = dados_imput %>% group_by(mes) %>% mutate(media_mensal = mean(Valor.de.Venda)) %>%
-  ggplot(aes(y = media_mensal, x = mes)) +
-  theme(axis.text = element_text(angle=90, size=1)) +
-  theme_dark() +
+  ggplot(aes(y = media_mensal, x = zoo::as.yearmon(mes))) +
+  theme(axis.text.x = element_blank()) +
+  theme_classic() +
   geom_point() +
-  labs(x = "Data", y = "Preço (R$)", title = "Médias mensais dos preços da gasolina")
+  labs(x = "Data", y = "Preço (R$)")
+#title = "Médias mensais dos preços da gasolina")
 
 plotly::ggplotly(g1)
 
@@ -348,11 +349,14 @@ head(bons[order(bons$AIC.model), ])
 
 ```
 
-
 ```{r}
 #aux = forecast::auto.arima(serie)
 
-ar_ = forecast::Arima(serie, order = c(2, 3, 0), seasonal = c(0,0,0))
+ar_ = forecast::Arima(serie, order = c(2, 3, 0),
+                      seasonal = c(0,0,0))
+
+summary(ar_)
+# AMBOS PARÂMETROS DO MODELO ARIMA SÃO NEGATIVOS!!
 
 shapiro.test(residuals(ar_))
 tseries::adf.test(residuals(ar_))
@@ -360,8 +364,15 @@ Box.test(residuals(ar_), type="Ljung")
 
 forecast::checkresiduals(ar_)
 
+```
+
+```{r testando um SARIMA, eval=FALSE, include=FALSE}
+aux=forecast::Arima(serie, order = c(2,3,0), seasonal = c(0, 0, 5))
+forecast::checkresiduals(aux)
+# Comportamento do gráfico muito parecido com o ARI(2,3)
 
 ```
+
 
 ### Aplicação das cartas de controle
 
@@ -375,6 +386,7 @@ g1$violations$beyond.limits
 g2 = qcc::ewma(ar_$residuals)
 
 g3 = qcc::cusum(ar_$residuals)
+
 ```
 
 ```{r}
@@ -384,5 +396,55 @@ d1[order(d1$media_mensal, decreasing = T), ]
 d1[56:58, ]
 
 g1$statistics[56:58]
+
+```
+
+### 
+
+```{r}
+plot(serie, col='blue', lwd=2)#, ylim=seq(0,8))
+lines(ar_$fitted, col="red", lwd=2)
+
+#ar_$fitted[[1]]
+
+```
+
+
+## Tentando 
+
+```{r}
+
+ar1 = matrix(ar_$residuals, ncol = 3, byrow = T)
+
+ar11 = matrix(d1$mes, ncol = 3, byrow = T)
+ar111 = matrix(c(1:72), ncol = 3, byrow = T)
+
+g1 = qcc::qcc(ar1, type = "R")
+g1$violations$beyond.limits
+ar11[g1$violations$beyond.limits, ]
+
+qcc::qcc(ar1, type="S")
+
+```
+
+```{r eval=FALSE, include=FALSE}
+#data.table::
+
+g1 = ggplot(dados,
+       aes(x=as.Date(Data.da.Coleta, format="%d/%m/%Y"),
+           y = Valor.de.Venda)) +
+  theme_dark() +
+  geom_line() +
+  geom_point(data=dados_imput,
+             aes(x=dados_imput$Data.da.Coleta, y=dados_imput$media_mensal,
+                 col="red")) +
+  theme(legend.position = "top",
+        axis.text = element_text(angle=45, size=7)) +
+  scale_x_date(breaks= seq(min(Data.da.Coleta),
+                           max(Data.da.Coleta), by="6 months"),
+               date_labels = "%b %y") +
+  labs(x = "Data", y = "Preço (R$)", title = "Todas observações do posto X")
+
+plotly::ggplotly(g1)
 ```
 
