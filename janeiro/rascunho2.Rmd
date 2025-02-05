@@ -291,6 +291,29 @@ dados_imput = dados_imput %>% group_by(mes) %>%
 
 ```
 
+```{r aplicando as cartas aos dados finais}
+
+d1 = unique(dados_imput[, c(3, 5)])
+
+qcc::qcc(d1$media_mensal, type = 'xbar.one',
+         title = 'Carta da média amostral (Dados finais)')
+
+qcc::ewma(d1$media_mensal, title = 'Carta MMEP (Dados finais)')
+
+qcc::cusum(d1$media_mensal, title = 'Carta "Soma cumulativa" (Dados finais)')
+
+```
+
+A aplicação das cartas aos dados autocorrelacionados indica uma quantidade muito grande de pontos fora de controle. É de se esperar que o processo não seja bem medido e tais dados façam com que as cartas tornem-se, frequentemente, errôneas.
+
+```{r eval=FALSE, include=FALSE}
+# scatter plot
+
+lag.plot(serie, do.lines = F, pch = 16)
+
+```
+
+
 ### Série temporal
 
 ```{r}
@@ -353,7 +376,7 @@ head(bons[order(bons$AIC.model), ])
 #aux = forecast::auto.arima(serie)
 
 ar_ = forecast::Arima(serie, order = c(2, 3, 0),
-                      seasonal = c(0,0,0))
+                      seasonal = c(0,0,0), method = "ML")
 
 summary(ar_)
 # AMBOS PARÂMETROS DO MODELO ARIMA SÃO NEGATIVOS!!
@@ -373,6 +396,23 @@ forecast::checkresiduals(aux)
 
 ```
 
+```{r ajustado x real, eval=FALSE, include=FALSE}
+
+df = data.frame(Data = as.Date(paste0(d1$mes, "-01")), Serie = as.vector(serie),
+                Ajuste = as.vector(ar_$fitted))
+
+aux = ggplot(df, aes(x = Data)) +
+  theme_classic() +
+  geom_line(aes(y = Serie, color = "Série real")) +
+  geom_line(aes(y = Ajuste, color = "ARIMA")) +
+  scale_color_manual(values = c("Série real" = "black", "ARIMA" = "red")) +
+  labs(y = 'Valor', color = "")
+
+# Série real x ajustada
+plotly::ggplotly(aux)
+
+```
+
 
 ### Aplicação das cartas de controle
 
@@ -380,12 +420,18 @@ forecast::checkresiduals(aux)
 #agrup = qcc::qcc.groups(as.vector(ar_$residuals),
 #                        as.vector(unique(dados_imput[, 3])))
 
-g1 = qcc::qcc(ar_$residuals, type = "xbar.one")
+g1 = qcc::qcc(ar_$residuals, type = "xbar.one", plot = T,
+              xlab="Grupo (Mês)",
+              ylab="Estatística do grupo",
+              add.stats = F,
+              label.limits = c("LCI", "LCS"))
 g1$violations$beyond.limits
 
 g2 = qcc::ewma(ar_$residuals)
 
 g3 = qcc::cusum(ar_$residuals)
+
+#plot(g1, restore.par = F)
 
 ```
 
@@ -399,33 +445,168 @@ g1$statistics[56:58]
 
 ```
 
-### 
+```{r carta da média bonita}
+g1 = qcc::qcc(ar_$residuals, type = "xbar.one", plot = F,
+              add.stats = F)
 
-```{r}
-plot(serie, col='blue', lwd=2)#, ylim=seq(0,8))
-lines(ar_$fitted, col="red", lwd=2)
+# 1. Convert qcc object to a data frame for ggplot2
+qcc_data <- data.frame(
+  x = 1:length(g1$data), # x-axis (sample number)
+  Value = g1$data,      # y-axis (data values)
+  CL = mean(g1$data[, 1]),     # Center Line
+  UCL = g1$limits[2],    # Upper Control Limit
+  LCL = g1$limits[1],    # Lower Control Limit
+  violations = ifelse(g1$data > g1$limits[2] | g1$data < (g1$limits[1] - 3*(g1$limits[2] - g1$limits[1])), "Violação", "Sob controle"))
 
-#ar_$fitted[[1]]
+# 2. Create the ggplot2 plot
+gg1 <- ggplot(qcc_data, aes(x = x, y = Value)) +
+  theme_classic() +
+  geom_point(aes(color = violations)) +  # Points, colored by violations
+  geom_line() +                      # Connect the points
+  geom_hline(yintercept = qcc_data$CL[1], linetype = "solid", color = "black",
+             linewidth = .1) + # Center line
+  geom_hline(yintercept = qcc_data$UCL[1], linetype = "dashed", color = "red",
+             linewidth = .3) + # Upper control limit
+  geom_hline(yintercept = qcc_data$LCL[1], linetype = "dashed", color = "blue",
+             linewidth = .3) + # Lower control limit
+  labs(title = "", x = "Grupo (Mês)", y = "Estatística do grupo") + # Labels
+  scale_color_manual(values = c("Violação" = "red", "Sob controle" = "black")) + # Custom colors
+  annotate(geom = 'text', label = c(paste0("LSC = ", round(qcc_data$UCL[1], 3)),
+                                    paste0("LC = ", round(qcc_data$CL[1], 3)),
+                                    paste0("LIC = ", round(qcc_data$LCL[1], 3))),
+           size = 3, x = c(5,1,5), y = c(qcc_data$UCL[1] + .1 ,
+                                         qcc_data$CL[1] + .1,
+                                         qcc_data$LCL[1] + .1)) +
+  theme(legend.position = "none") # Remove the legend
+
+plotly::ggplotly(gg1)
 
 ```
 
+#### Adicionais
 
-## Tentando 
-
-```{r}
+```{r amplitude trimestre}
 
 ar1 = matrix(ar_$residuals, ncol = 3, byrow = T)
 
 ar11 = matrix(d1$mes, ncol = 3, byrow = T)
 ar111 = matrix(c(1:72), ncol = 3, byrow = T)
 
-g1 = qcc::qcc(ar1, type = "R")
+am1 = qcc::qcc(ar1, type = "R")
 g1$violations$beyond.limits
-ar11[g1$violations$beyond.limits, ]
+#ar11[g1$violations$beyond.limits, ]
+
+#qcc::qcc(ar1, type="S")
+
+```
+
+```{r amplitude quadrimestre}
+
+ar1 = matrix(ar_$residuals, ncol = 4, byrow = T)
+
+ar11 = matrix(d1$mes, ncol = 4, byrow = T)
+ar111 = matrix(c(1:72), ncol = 4, byrow = T)
+
+am1 = qcc::qcc(ar1, type = "R")
+am1$violations$beyond.limits
+
+#ar11[am1$violations$beyond.limits, ]
 
 qcc::qcc(ar1, type="S")
 
 ```
+
+```{r desvio padrao trimestre}
+
+ar1 = matrix(ar_$residuals, ncol = 3, byrow = T)
+
+ar11 = matrix(d1$mes, ncol = 3, byrow = T)
+ar111 = matrix(c(1:72), ncol = 3, byrow = T)
+
+am1 = qcc::qcc(ar1, type = "S")
+g1$violations$beyond.limits
+#ar11[g1$violations$beyond.limits, ]
+
+
+```
+
+```{r}
+# 1. Convert qcc object to a data frame for ggplot2
+qcc_data <- data.frame(
+  x = 1:length(am1$statistics), # x-axis (sample number)
+  Value = am1$statistics,      # y-axis (data values)
+  CL = mean(am1$statistics),     # Center Line
+  UCL = am1$limits[2],    # Upper Control Limit
+  LCL = am1$limits[1],    # Lower Control Limit
+  violations = ifelse(am1$statistics > am1$limits[2] | am1$statistics < (am1$limits[1] - 3*(am1$limits[2] - am1$limits[1])), "Violação", "Sob controle"))
+
+# 2. Create the ggplot2 plot
+gg1 <- ggplot(qcc_data, aes(x = x, y = Value)) +
+  theme_classic() +
+  geom_point(aes(color = violations)) +  # Points, colored by violations
+  geom_line() +                      # Connect the points
+  geom_hline(yintercept = qcc_data$CL[1], linetype = "solid", color = "black",
+             linewidth = .1) + # Center line
+  geom_hline(yintercept = qcc_data$UCL[1], linetype = "dashed", color = "red",
+             linewidth = .3) + # Upper control limit
+  geom_hline(yintercept = qcc_data$LCL[1], linetype = "dashed", color = "blue",
+             linewidth = .3) + # Lower control limit
+  labs(title = "", x = "Grupo (Mês)", y = "Estatística do grupo") + # Labels
+  scale_color_manual(values = c("Violação" = "red", "Sob controle" = "black")) + # Custom colors
+  annotate(geom = 'text', label = c(paste0("LSC = ", round(qcc_data$UCL[1], 3)),
+                                    paste0("LC = ", round(qcc_data$CL[1], 3)),
+                                    paste0("LIC = ", round(qcc_data$LCL[1], 3))),
+           size = 3, x = c(5,1,5), y = c(qcc_data$UCL[1] + .1 ,
+                                         qcc_data$CL[1] + .1,
+                                         qcc_data$LCL[1] + .1)) +
+  theme(legend.position = "none") # Remove the legend
+
+plotly::ggplotly(gg1)
+```
+
+
+```{r eval=FALSE, include=FALSE}
+
+qcc_bonito = function(g1){
+  # g1 é um objeto qcc (qcc::qcc)
+  
+  # 1. Convert qcc object to a data frame for ggplot2
+  qcc_data <- data.frame(
+    x = 1:length(g1$data), # x-axis (sample number)
+    Value = g1$data,      # y-axis (data values)
+    CL = mean(g1$data[, 1]),     # Center Line
+    UCL = g1$limits[2],    # Upper Control Limit
+    LCL = g1$limits[1],    # Lower Control Limit
+    violations = ifelse(g1$data > g1$limits[2] | g1$data < (g1$limits[1] - 3*(g1$limits[2] - g1$limits[1])), "Violação", "Sob controle"))
+  
+  # 2. Create the ggplot2 plot
+  gg1 <- ggplot(qcc_data, aes(x = x, y = Value)) +
+    theme_classic() +
+    geom_point(aes(color = violations)) +  # Points, colored by violations
+    geom_line() +                      # Connect the points
+    geom_hline(yintercept = qcc_data$CL[1], linetype = "solid", color = "black",
+               linewidth = .1) + # Center line
+    geom_hline(yintercept = qcc_data$UCL[1], linetype = "dashed", color = "red",
+               linewidth = .3) + # Upper control limit
+    geom_hline(yintercept = qcc_data$LCL[1], linetype = "dashed", color = "blue",
+               linewidth = .3) + # Lower control limit
+    labs(title = "", x = "Grupo (Mês)", y = "Estatística do grupo") + # Labels
+    scale_color_manual(values = c("Violação" = "red", "Sob controle" = "black")) + # Custom colors
+    annotate(geom = 'text', label = c(paste0("LSC = ", round(qcc_data$UCL[1], 3)),
+                                      paste0("LC = ", round(qcc_data$CL[1], 3)),
+                                      paste0("LIC = ", round(qcc_data$LCL[1], 3))),
+             size = 3, x = c(5,1,5), y = c(qcc_data$UCL[1] + .1 ,
+                                           qcc_data$CL[1] + .1,
+                                           qcc_data$LCL[1] + .1)) +
+    theme(legend.position = "none") # Remove the legend
+  
+  return(plotly::ggplotly(gg1))
+
+
+  }
+
+```
+
 
 ```{r eval=FALSE, include=FALSE}
 #data.table::
