@@ -2,10 +2,654 @@
 title: "Controle estatístico para dados autocorrelacionados"
 author: "Doriedson"
 date: "2025-02-19"
-output: html_document
+output:
+  html_document:
+    theme: darkly
+    toc: yes
+    toc_float:
+      collapsed: true
+    number_sections: true
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.height = 5,
+	fig.width = 7,
+	message = FALSE,
+	warnings = FALSE
+)
 ```
 
+```{r Requisitos, include=FALSE}
+require(dplyr)
+require(lubridate)
+require(ggplot2)
+
+source('abrev.R')
+
+```
+
+```{r, Filtragem I}
+arquivos <- list.files("Dados", pattern = "*.csv", full.names = TRUE)
+
+dados <- list()
+for (i in seq_along(arquivos)) {
+  dados[[i]] <- read.csv(arquivos[i], sep=';')
+}
+
+dados_combinados <- do.call(rbind, dados)
+
+dados_selecionados = subset(dados_combinados,
+                            dados_combinados$Municipio == 'GOIANIA' &
+                              dados_combinados$Produto == 'GASOLINA' &
+                              dados_combinados$Revenda == 'POSTO XODO LTDA')
+
+dados_selecionados <- dados_selecionados[, c(4, 11, 12, 13)]
+head(dados_selecionados)
+#table(dados_selecionados$Revenda)
+
+dados3 <- dados_selecionados
+
+rm(dados_combinados, dados)
+
+```
+
+
+```{r funcs, echo=FALSE}
+# Fazer as modificações para atender o sarima
+
+# Function to check normality of residuals
+check_normality <- function(residuals) {
+  shapiro_test <- shapiro.test(residuals)
+  p_value <- shapiro_test$p.value
+  return(p_value > 0.05)
+}
+
+modelando = function(data, p_values=c(0:5), d_values=c(0:3), q_values=c(0:5),
+                      P_values=c(0:5), D_values=c(0:3), Q_values=c(0:5)){
+  # Ajusta modelos com todas combinações de coeficientes disponibilizados.
+  # Também testa normalidade e estacionariedade de cada modelo.
+  
+  best_model <- NULL
+  best_aic <- Inf
+  
+  Result = data.frame(p=0, d=0, q=0, P=0, D=0, Q=0,
+                      p_valor=0, p_estac=0, p_ind=0, AIC=0)
+  
+  for (p in p_values) {
+    for (d in d_values) {
+      for (q in q_values) {
+        for (P in P_values) {
+          for (D in D_values) {
+            for (Q in Q_values) {
+        
+        #print(c(p,d,q))
+        
+        tryCatch({
+          #model <- arima(data, order = c(p, d, q), method="ML")
+          model = forecast::Arima(data, order = c(p,d,q), seasonal = c(P,D,Q))
+          shapiro_test <- shapiro.test(residuals(model))
+          adf = tseries::adf.test(residuals(model))
+          indep = Box.test(residuals(model), type="Ljung")
+          
+          p_estac = adf$p.value
+          p_norm <- shapiro_test$p.value
+          p_ind <- indep$p.value
+          
+          Result = rbind(Result, c(p, d, q, P, D, Q, p_norm, p_estac,
+                                   p_ind, AIC(model)))
+          
+          if (check_normality(model$residuals) && AIC(model) < best_aic) {
+            best_model <- model
+            best_aic <- AIC(model)
+          }
+        }, error = function(e) {
+          # Handle errors gracefully, e.g., print a warning message
+          warning("Error fitting ARIMA(", p, ", ", d, ", ", q, "): ", e$message)
+        })
+            }
+          }
+        }
+      }
+    }
+  }
+  Result <- Result[-1,]
+  
+  #cat("\n\nOs maiores valores-p para o teste de Shapiro-Wilk:\n")
+  #print(head(Result[order(Result$p_valor, decreasing = TRUE), ]))
+  #cat("\n\nOs menores valores-p para o teste ADF:\n")
+  #print(head(Result[order(Result$p_estac, decreasing = FALSE), ]))
+  
+  aux_normal = ifelse(Result$p_valor > 5/100,1,0)
+  cat("\n Shapiro-Wilk: Valores-p maiores que 5% -->", sum(aux_normal))
+  
+  aux_estac = ifelse(Result$p_estac < 5/100,1,0)
+  cat("\n ADF: Valores-p menores que 5% -->", sum(aux_estac))
+  
+  aux_ind = ifelse(Result$p_ind > 5/100,1,0)
+  cat("\n Box-Ljung: Valores-p maiores que 5% -->", sum(aux_estac))
+  
+  return(Result)
+}
+
+```
+
+### Resumo
+
+-   Período: 2018 a 2023;
+-   Posto X;
+-   Quantidade de observações iniciais: 365
+-   Método de agrupamento: **média mensal**;
+-   Quantidade de observações finais: 72;
+-   Imputação de dados na observação dos meses listados abaixo foi feita a partir da média daquele ano;
+-   Tentativa de ajuste com um modelo SARIMA;
+
+A partir da base de dados dos preços de combustíveis na cidade de Goiânia, será feita a filtragem listada acima. Foi selecionado um **único** posto revendedor - o posto com maior número de observações no período citado - contendo 365 valores divididos em 188 datas distintas; a seguir, foi tomada a média de cada mês essa será a variável estudada; foi feito a **imputação** de valores a cinco meses que não possuíam dados (nov-2018, dez-2018, fev-2019, set-2020, fev-2023) por meio da média dos seus respectivos anos; por fim,
+
+\newpage
+
+### Organização dos dados
+
+#### Antes
+
+```{r funcs 2, echo=FALSE}
+contar_mensal = function(v) {
+  # Recebe um vetor de dias, no formato 'YYYY-MM-DD' e verifica se algum dos
+  # meses não está incluso.
+  
+  df = as.data.frame(v)
+  colnames(df) <- "dia"
+  df = cbind(df, format(df$dia, "%Y-%m"))
+  colnames(df) <- c("dia", "grupo")
+}
+
+check_missing_months <- function(df, date_col) {
+  # Extract year and month from the date column
+  df <- df %>%
+    mutate(year_month = format(as.Date(!!sym(date_col)), "%Y-%m")) %>%
+    distinct(year_month)
+  
+  # Generate a sequence of all months between the min and max dates
+  all_months <- seq.Date(from = as.Date(paste0(min(df$year_month), "-01")),
+                         to = as.Date(paste0(max(df$year_month), "-01")),
+                         by = "month") %>%
+    format("%Y-%m")
+  
+  # Identify missing months
+  missing_months <- setdiff(all_months, df$year_month)
+  
+  print(length(missing_months))
+  
+  return(missing_months)
+}
+
+```
+
+```{r dados, echo=FALSE}
+
+# Formatando datas
+aux = as.Date(dados3$Data.da.Coleta, format = "%d/%m/%Y")
+dados3$Data.da.Coleta <- aux
+
+# Substituição de virgulas nos preços
+aux = stringr::str_replace_all(dados3$Valor.de.Venda, ",", ".")
+dados3$Valor.de.Venda <-as.numeric(aux)
+
+# Agrupamento mensal e anual
+aux = format(dados3$Data.da.Coleta, "%Y-%m")
+dados3$mes <- aux
+aux = format(dados3$Data.da.Coleta, "%Y")
+dados3$ano <- aux
+rm(aux)
+
+# Retirando todos combustíveis, exceto gasolina
+dados3g = subset(dados3, dados3$Produto == "GASOLINA")
+rm(dados3)
+
+```
+
+```{r Tratamento dos dados}
+
+dados = dados3g[, -c(1,2)]
+
+#head(dados)
+
+summary(dados)
+
+```
+
+
+```{r echo=FALSE}
+# plotar as observaçoes soltas!
+attach(dados)
+
+g1 = ggplot(dados,
+       aes(x=as.Date(Data.da.Coleta, format="%d/%m/%Y"),
+           y = Valor.de.Venda)) +
+  theme_dark() +
+  geom_point() +
+  theme(legend.position = "top",
+        axis.text = element_text(angle=45, size=7)) +
+  scale_x_date(breaks= seq(min(Data.da.Coleta),
+                           max(Data.da.Coleta), by="6 months"),
+               date_labels = "%b %y") +
+  labs(x = "Data", y = "Preço (R$)", title = "Todas observações do posto X")
+
+plotly::ggplotly(g1)
+
+```
+
+Nota-se que o comportamento dos preços do posto X se assemelha ao geral.
+
+#### Depois
+
+```{r}
+# Meses faltantes
+m <- check_missing_months(dados, "Data.da.Coleta")
+print(m)
+
+# xodo: 5 faltas "2018-11" "2018-12" "2019-02" "2020-09" "2023-02"
+# hiper moreira: 18 faltas
+# viena: 5
+# Monaco: 4
+
+```
+
+Como há 5 meses sem nenhuma observação foi utilizado da imputação de dados. Para cada mês listado acima será imputado o valor da média do respectivo ano, portanto, novembro e dezembro de 2018 terão o mesmo valor. 
+
+```{r imputar}
+# Calculando médias anuais
+aux = dados %>% group_by(ano) %>% mutate(media_anual = mean(Valor.de.Venda))
+
+#unique(aux[, c(4, 5)])
+
+# "2018-11" "2018-12" "2019-02" "2020-09" "2023-02"
+# Adicionar os seguintes valores
+linha1 = data.frame(matrix(c("2018-11-01", 4.661141, "2018-11", "2018",
+                             "2018-12-01", 4.661141, "2018-12", "2018",
+                             "2019-02-01", 4.665063, "2019-02", "2019",
+                             "2020-09-01", 4.460714, "2020-09", "2020",
+                             "2023-02-01", 5.702877, "2023-02", "2023"),
+                           byrow= T, ncol=4))
+colnames(linha1) <- colnames(dados)
+
+linha1[, 1] <- as.Date.character(linha1[, 1])
+linha1[, 2] <- as.numeric(linha1[, 2])
+
+```
+
+```{r echo=FALSE}
+# Adicionando valores ao conjunto de dados (completando)
+dados_imput = rbind(dados[, ], linha1)
+dados_imput = dados_imput[order(dados_imput$Data.da.Coleta), ]
+
+g1 = dados_imput %>% group_by(mes) %>% mutate(media_mensal = mean(Valor.de.Venda)) %>%
+  ggplot(aes(y = media_mensal, x = zoo::as.yearmon(mes))) +
+  theme(axis.text.x = element_blank()) +
+  theme_classic() +
+  geom_point() +
+  labs(x = "Data", y = "Preço (R$)")
+#title = "Médias mensais dos preços da gasolina")
+
+plotly::ggplotly(g1)
+
+dados_imput = dados_imput %>% group_by(mes) %>%
+  mutate(media_mensal = mean(Valor.de.Venda))
+
+```
+
+```{r aplicando as cartas aos dados finais}
+
+d1 = unique(dados_imput[, c(3, 5)])
+
+qcc::qcc(d1$media_mensal, type = 'xbar.one',
+         title = 'Carta da média amostral (Dados finais)')
+
+qcc::ewma(d1$media_mensal, title = 'Carta MMEP (Dados finais)')
+
+qcc::cusum(d1$media_mensal, title = 'Carta "Soma cumulativa" (Dados finais)')
+
+# AGRUPAMENTO TRIMESTRAL
+m1 = matrix(d1$media_mensal, ncol = 3, byrow = T)
+m11 = matrix(d1$mes, ncol=3, byrow = T)
+
+qcc::qcc(data = m1, type = "S")
+qcc::qcc(data = m1, type = "R")
+
+```
+
+A aplicação das cartas aos dados autocorrelacionados indica uma quantidade muito grande de pontos fora de controle. É de se esperar que o processo não seja bem medido e tais dados façam com que as cartas tornem-se, frequentemente, errôneas.
+
+```{r eval=FALSE, include=FALSE}
+# scatter plot
+
+lag.plot(serie, do.lines = F, pch = 16)
+
+```
+
+
+### Série temporal
+
+```{r}
+par(bg='gray')
+d1 = unique(dados_imput[, c(3, 5)])
+
+serie = ts(d1[, 2], start=c(2018, 1), frequency = 12)
+#serie = ts(dados_imput$media_mensal, start=c(2018, 1), end=c(2023, 12), frequency = 12)
+plot(serie, ylab="Valor", xlab="Obs.")
+
+```
+
+```{r}
+forecast::autoplot(decompose(serie))
+
+```
+
+Verificando a presença de autocorrelação entre as observações da série nota-se que há o decaimento exponencial à medida que se aumenta o _lag_.
+
+```{r}
+par(bg='gray')
+acf(d1$media_mensal, main = "Correlação entre as médias mensais")
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# Série FINAL
+
+#write.csv(unique(dados_imput[, c(3, 5)]), "serie_final.csv")
+
+```
+
+### Modelo ARIMA
+
+Após toda organização do conjunto de dados, foram testados diversos modelos SARIMA. A seguir há uma relação dos modelos que apresentaram resíduos com: **normalidade**, **estacionariedade** e **independência.**
+
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+# Testando os modelos ARIMA
+mods = modelando(serie, P_values = 0, D_values = 0, Q_values = 0)
+
+subset(mods, p_valor > 5/100 & p_estac < 5/100 & p_ind > 5/100)
+
+```
+
+Outros modelos que também apresentaram todos pressupostos.
+
+```{r include=FALSE}
+# Ajustando os SARIMA tbm
+modelos = read.table(modelos_sarima)
+
+colnames(modelos) <- c('x', 'p', 'd', 'q','P', 'D', 'Q', 'p_valor', 'p_estac',
+                     'p_ind', 'AIC.model')
+
+bons = subset(modelos, p_valor > 5/100 & p_estac < 5/100 & p_ind > 5/100)
+head(bons[order(bons$AIC.model), ])
+
+```
+
+```{r}
+#aux = forecast::auto.arima(serie)
+
+ar_ = forecast::Arima(serie, order = c(2, 3, 0),
+                      seasonal = c(0,0,0), method = "ML")
+
+summary(ar_)
+# AMBOS PARÂMETROS DO MODELO ARIMA SÃO NEGATIVOS!!
+
+shapiro.test(residuals(ar_))
+tseries::adf.test(residuals(ar_))
+Box.test(residuals(ar_), type="Ljung")
+
+forecast::checkresiduals(ar_)
+
+```
+
+```{r testando um SARIMA, eval=FALSE, include=FALSE}
+aux=forecast::Arima(serie, order = c(2,3,0), seasonal = c(0, 0, 5))
+forecast::checkresiduals(aux)
+# Comportamento do gráfico muito parecido com o ARI(2,3)
+
+```
+
+```{r Vendo os resíduos, eval=FALSE, include=FALSE}
+df = data.frame('Diferença' = serie-ar_$fitted, 'Resíduos' = ar_$residuals)
+df
+
+```
+
+
+```{r ajustado x real, eval=FALSE, include=FALSE}
+
+df = data.frame(Data = as.Date(paste0(d1$mes, "-01")), Serie = as.vector(serie),
+                Ajuste = as.vector(ar_$fitted))
+
+aux = ggplot(df, aes(x = Data)) +
+  theme_classic() +
+  geom_line(aes(y = Serie, color = "Série real")) +
+  geom_line(aes(y = Ajuste, color = "ARIMA")) +
+  geom_line(linetype = 'dotted', aes(y = ar_$residuals, color = 'Resíduos')) +
+  scale_color_manual(values = c("Série real" = "black", "ARIMA" = "red",
+                                "Resíduos" = 'black')) +
+  labs(y = 'Valor', color = "")
+
+# Série real x ajustada
+plotly::ggplotly(aux)
+
+```
+
+
+### Aplicação das cartas de controle
+
+```{r}
+#agrup = qcc::qcc.groups(as.vector(ar_$residuals),
+#                        as.vector(unique(dados_imput[, 3])))
+
+g1 = qcc::qcc(ar_$residuals, type = "xbar.one", plot = T,
+              xlab="Grupo (Mês)",
+              ylab="Estatística do grupo",
+              add.stats = F,
+              label.limits = c("LCI", "LCS"))
+g1$violations$beyond.limits
+
+g2 = qcc::ewma(ar_$residuals)
+
+g3 = qcc::cusum(ar_$residuals)
+
+#plot(g1, restore.par = F)
+
+```
+
+```{r}
+#head(d1)
+d1[order(d1$media_mensal, decreasing = T), ]
+
+d1[56:58, ]
+
+g1$statistics[56:58]
+
+```
+
+```{r carta da média bonita}
+g1 = qcc::qcc(ar_$residuals, type = "xbar.one", plot = F,
+              add.stats = F)
+
+# 1. Convert qcc object to a data frame for ggplot2
+qcc_data <- data.frame(
+  x = 1:length(g1$data), # x-axis (sample number)
+  Value = g1$data,      # y-axis (data values)
+  CL = mean(g1$data[, 1]),     # Center Line
+  UCL = g1$limits[2],    # Upper Control Limit
+  LCL = g1$limits[1],    # Lower Control Limit
+  violations = ifelse(g1$data > g1$limits[2] | g1$data < (g1$limits[1] - 3*(g1$limits[2] - g1$limits[1])), "Violação", "Sob controle"))
+
+# 2. Create the ggplot2 plot
+gg1 <- ggplot(qcc_data, aes(x = x, y = Value)) +
+  theme_classic() +
+  geom_point(aes(color = violations)) +  # Points, colored by violations
+  geom_line() +                      # Connect the points
+  geom_hline(yintercept = qcc_data$CL[1], linetype = "solid", color = "black",
+             linewidth = .1) + # Center line
+  geom_hline(yintercept = qcc_data$UCL[1], linetype = "dashed", color = "red",
+             linewidth = .3) + # Upper control limit
+  geom_hline(yintercept = qcc_data$LCL[1], linetype = "dashed", color = "blue",
+             linewidth = .3) + # Lower control limit
+  labs(title = "", x = "Grupo (Mês)", y = "Estatística do grupo") + # Labels
+  scale_color_manual(values = c("Violação" = "red", "Sob controle" = "black")) + # Custom colors
+  annotate(geom = 'text', label = c(paste0("LSC = ", round(qcc_data$UCL[1], 3)),
+                                    paste0("LC = ", round(qcc_data$CL[1], 3)),
+                                    paste0("LIC = ", round(qcc_data$LCL[1], 3))),
+           size = 3, x = c(5,1,5), y = c(qcc_data$UCL[1] + .1 ,
+                                         qcc_data$CL[1] + .1,
+                                         qcc_data$LCL[1] + .1)) +
+  theme(legend.position = "none") # Remove the legend
+
+plotly::ggplotly(gg1)
+
+```
+
+#### Adicionais
+
+```{r amplitude trimestre}
+
+ar1 = matrix(ar_$residuals, ncol = 3, byrow = T)
+
+ar11 = matrix(d1$mes, ncol = 3, byrow = T)
+ar111 = matrix(c(1:72), ncol = 3, byrow = T)
+
+am1 = qcc::qcc(ar1, type = "R")
+g1$violations$beyond.limits
+#ar11[g1$violations$beyond.limits, ]
+
+#qcc::qcc(ar1, type="S")
+
+```
+
+```{r amplitude quadrimestre}
+
+ar1 = matrix(ar_$residuals, ncol = 4, byrow = T)
+
+ar11 = matrix(d1$mes, ncol = 4, byrow = T)
+ar111 = matrix(c(1:72), ncol = 4, byrow = T)
+
+am1 = qcc::qcc(ar1, type = "R")
+am1$violations$beyond.limits
+
+#ar11[am1$violations$beyond.limits, ]
+
+qcc::qcc(ar1, type="S")
+
+```
+
+```{r desvio padrao trimestre}
+
+ar1 = matrix(ar_$residuals, ncol = 3, byrow = T)
+
+ar11 = matrix(d1$mes, ncol = 3, byrow = T)
+ar111 = matrix(c(1:72), ncol = 3, byrow = T)
+
+am1 = qcc::qcc(ar1, type = "S")
+g1$violations$beyond.limits
+#ar11[g1$violations$beyond.limits, ]
+
+
+```
+
+```{r}
+# 1. Convert qcc object to a data frame for ggplot2
+qcc_data <- data.frame(
+  x = 1:length(am1$statistics), # x-axis (sample number)
+  Value = am1$statistics,      # y-axis (data values)
+  CL = mean(am1$statistics),     # Center Line
+  UCL = am1$limits[2],    # Upper Control Limit
+  LCL = am1$limits[1],    # Lower Control Limit
+  violations = ifelse(am1$statistics > am1$limits[2] | am1$statistics < (am1$limits[1] - 3*(am1$limits[2] - am1$limits[1])), "Violação", "Sob controle"))
+
+# 2. Create the ggplot2 plot
+gg1 <- ggplot(qcc_data, aes(x = x, y = Value)) +
+  theme_classic() +
+  geom_point(aes(color = violations)) +  # Points, colored by violations
+  geom_line() +                      # Connect the points
+  geom_hline(yintercept = qcc_data$CL[1], linetype = "solid", color = "black",
+             linewidth = .1) + # Center line
+  geom_hline(yintercept = qcc_data$UCL[1], linetype = "dashed", color = "red",
+             linewidth = .3) + # Upper control limit
+  geom_hline(yintercept = qcc_data$LCL[1], linetype = "dashed", color = "blue",
+             linewidth = .3) + # Lower control limit
+  labs(title = "", x = "Grupo (Mês)", y = "Estatística do grupo") + # Labels
+  scale_color_manual(values = c("Violação" = "red", "Sob controle" = "black")) + # Custom colors
+  annotate(geom = 'text', label = c(paste0("LSC = ", round(qcc_data$UCL[1], 3)),
+                                    paste0("LC = ", round(qcc_data$CL[1], 3)),
+                                    paste0("LIC = ", round(qcc_data$LCL[1], 3))),
+           size = 3, x = c(5,1,5), y = c(qcc_data$UCL[1] + .1 ,
+                                         qcc_data$CL[1] + .1,
+                                         qcc_data$LCL[1] + .1)) +
+  theme(legend.position = "none") # Remove the legend
+
+plotly::ggplotly(gg1)
+```
+
+
+```{r eval=FALSE, include=FALSE}
+
+qcc_bonito = function(g1){
+  # g1 é um objeto qcc (qcc::qcc)
+  
+  # 1. Convert qcc object to a data frame for ggplot2
+  qcc_data <- data.frame(
+    x = 1:length(g1$data), # x-axis (sample number)
+    Value = g1$data,      # y-axis (data values)
+    CL = mean(g1$data[, 1]),     # Center Line
+    UCL = g1$limits[2],    # Upper Control Limit
+    LCL = g1$limits[1],    # Lower Control Limit
+    violations = ifelse(g1$data > g1$limits[2] | g1$data < (g1$limits[1] - 3*(g1$limits[2] - g1$limits[1])), "Violação", "Sob controle"))
+  
+  # 2. Create the ggplot2 plot
+  gg1 <- ggplot(qcc_data, aes(x = x, y = Value)) +
+    theme_classic() +
+    geom_point(aes(color = violations)) +  # Points, colored by violations
+    geom_line() +                      # Connect the points
+    geom_hline(yintercept = qcc_data$CL[1], linetype = "solid", color = "black",
+               linewidth = .1) + # Center line
+    geom_hline(yintercept = qcc_data$UCL[1], linetype = "dashed", color = "red",
+               linewidth = .3) + # Upper control limit
+    geom_hline(yintercept = qcc_data$LCL[1], linetype = "dashed", color = "blue",
+               linewidth = .3) + # Lower control limit
+    labs(title = "", x = "Grupo (Mês)", y = "Estatística do grupo") + # Labels
+    scale_color_manual(values = c("Violação" = "red", "Sob controle" = "black")) + # Custom colors
+    annotate(geom = 'text', label = c(paste0("LSC = ", round(qcc_data$UCL[1], 3)),
+                                      paste0("LC = ", round(qcc_data$CL[1], 3)),
+                                      paste0("LIC = ", round(qcc_data$LCL[1], 3))),
+             size = 3, x = c(5,1,5), y = c(qcc_data$UCL[1] + .1 ,
+                                           qcc_data$CL[1] + .1,
+                                           qcc_data$LCL[1] + .1)) +
+    theme(legend.position = "none") # Remove the legend
+  
+  return(plotly::ggplotly(gg1))
+
+
+  }
+
+```
+
+
+```{r eval=FALSE, include=FALSE}
+#data.table::
+
+g1 = ggplot(dados,
+       aes(x=as.Date(Data.da.Coleta, format="%d/%m/%Y"),
+           y = Valor.de.Venda)) +
+  theme_dark() +
+  geom_line() +
+  geom_point(data=dados_imput,
+             aes(x=dados_imput$Data.da.Coleta, y=dados_imput$media_mensal,
+                 col="red")) +
+  theme(legend.position = "top",
+        axis.text = element_text(angle=45, size=7)) +
+  scale_x_date(breaks= seq(min(Data.da.Coleta),
+                           max(Data.da.Coleta), by="6 months"),
+               date_labels = "%b %y") +
+  labs(x = "Data", y = "Preço (R$)", title = "Todas observações do posto X")
+
+plotly::ggplotly(g1)
+```
