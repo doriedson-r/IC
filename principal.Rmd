@@ -9,7 +9,6 @@ output:
     toc_float:
       collapsed: true
     number_sections: true
-  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -31,7 +30,7 @@ source('abrev.R')
 
 ```
 
-```{r, Filtragem I}
+```{r include=FALSE}
 arquivos <- list.files("Dados", pattern = "*.csv", full.names = TRUE)
 
 dados <- list()
@@ -144,7 +143,7 @@ modelando = function(data, p_values=c(0:5), d_values=c(0:3), q_values=c(0:5),
 -   Método de agrupamento: **média mensal**;
 -   Quantidade de observações finais: 72;
 -   Imputação de dados na observação dos meses listados abaixo foi feita a partir da média daquele ano;
--   Tentativa de ajuste com um modelo SARIMA;
+-   Tentativa de ajuste com um modelo ARIMA;
 
 A partir da base de dados dos preços de combustíveis na cidade de Goiânia, será feita a filtragem listada acima. Foi selecionado um **único** posto revendedor - o posto com maior número de observações no período citado - contendo 365 valores divididos em 188 datas distintas; a seguir, foi tomada a média de cada mês essa será a variável estudada; foi feito a **imputação** de valores a cinco meses que não possuíam dados (nov-2018, dez-2018, fev-2019, set-2020, fev-2023) por meio da média dos seus respectivos anos; por fim,
 
@@ -304,19 +303,19 @@ dados_imput = dados_imput %>% group_by(mes) %>%
 
 d1 = unique(dados_imput[, c(3, 5)])
 
-qcc::qcc(d1$media_mensal, type = 'xbar.one',
+a = qcc::qcc(d1$media_mensal, type = 'xbar.one',
          title = 'Carta da média amostral (Dados finais)')
 
-qcc::ewma(d1$media_mensal, title = 'Carta MMEP (Dados finais)')
+a = qcc::ewma(d1$media_mensal, title = 'Carta MMEP (Dados finais)')
 
-qcc::cusum(d1$media_mensal, title = 'Carta "Soma cumulativa" (Dados finais)')
+a = qcc::cusum(d1$media_mensal, title = 'Carta "Soma cumulativa" (Dados finais)')
 
 # AGRUPAMENTO TRIMESTRAL
 m1 = matrix(d1$media_mensal, ncol = 3, byrow = T)
 m11 = matrix(d1$mes, ncol=3, byrow = T)
 
-qcc::qcc(data = m1, type = "S")
-qcc::qcc(data = m1, type = "R")
+a = qcc::qcc(data = m1, type = "S")
+a = qcc::qcc(data = m1, type = "R")
 
 ```
 
