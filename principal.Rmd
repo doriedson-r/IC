@@ -30,36 +30,41 @@ source('abrev.R')
 
 ```
 
-```{r include=FALSE}
+```{r Dados (importação), include=FALSE}
+rm(list=ls())
 arquivos <- list.files("Dados", pattern = "*.csv", full.names = TRUE)
 
 dados <- list()
 for (i in seq_along(arquivos)) {
   dados[[i]] <- read.csv(arquivos[i], sep=';')
+  
+  # Por questões de otimização do uso da memória,
+  # será feita a seleção junto da importação.
+  dados_selecionados = subset(dados[[i]],
+                              dados[[i]]$Municipio == 'GOIANIA' &
+                              dados[[i]]$Produto == 'GASOLINA' &
+                              dados[[i]]$Revenda == 'POSTO XODO LTDA')
+  
+  dados[[i]] <- dados_selecionados
 }
 
 dados_combinados <- do.call(rbind, dados)
 
-dados_selecionados = subset(dados_combinados,
-                            dados_combinados$Municipio == 'GOIANIA' &
-                              dados_combinados$Produto == 'GASOLINA' &
-                              dados_combinados$Revenda == 'POSTO XODO LTDA')
+dados_combinados <- dados_combinados[, c(4, 11, 12, 13)]
+head(dados_combinados)
 
-dados_selecionados <- dados_selecionados[, c(4, 11, 12, 13)]
-head(dados_selecionados)
-#table(dados_selecionados$Revenda)
-
-dados3 <- dados_selecionados
+# 'dados3' corresponde ao conjunto que contém TODAS observações do posto selecionado
+dados3 <- dados_combinados
 
 rm(dados_combinados, dados)
 
 ```
 
 
-```{r funcs, echo=FALSE}
+```{r Funções, echo=FALSE}
 # Fazer as modificações para atender o sarima
 
-# Function to check normality of residuals
+# Função p/ checar normalidade dos resíduos
 check_normality <- function(residuals) {
   shapiro_test <- shapiro.test(residuals)
   p_value <- shapiro_test$p.value
@@ -153,7 +158,7 @@ A partir da base de dados dos preços de combustíveis na cidade de Goiânia, se
 
 #### Antes
 
-```{r funcs 2, echo=FALSE}
+```{r Funções 2, echo=FALSE}
 contar_mensal = function(v) {
   # Recebe um vetor de dias, no formato 'YYYY-MM-DD' e verifica se algum dos
   # meses não está incluso.
@@ -186,7 +191,7 @@ check_missing_months <- function(df, date_col) {
 
 ```
 
-```{r dados, echo=FALSE}
+```{r Dados II (tratamento), echo=FALSE}
 
 # Formatando datas
 aux = as.Date(dados3$Data.da.Coleta, format = "%d/%m/%Y")
@@ -203,17 +208,14 @@ aux = format(dados3$Data.da.Coleta, "%Y")
 dados3$ano <- aux
 rm(aux)
 
-# Retirando todos combustíveis, exceto gasolina
-dados3g = subset(dados3, dados3$Produto == "GASOLINA")
-rm(dados3)
+boxplot(dados3$Valor.de.Venda~as.numeric(dados3$ano), col="green",
+        xlab='Ano', ylab='Valor da gasolina (reais/litro)')
 
 ```
 
-```{r Tratamento dos dados}
-
-dados = dados3g[, -c(1,2)]
-
-#head(dados)
+```{r Dados III}
+# Retirando 'Revenda' e 'Produto'.
+dados = dados3[, -c(1,2)]
 
 summary(dados)
 
@@ -239,8 +241,6 @@ g1 = ggplot(dados,
 plotly::ggplotly(g1)
 
 ```
-
-Nota-se que o comportamento dos preços do posto X se assemelha ao geral.
 
 #### Depois
 
@@ -321,14 +321,6 @@ a = qcc::qcc(data = m1, type = "R")
 
 A aplicação das cartas aos dados autocorrelacionados indica uma quantidade muito grande de pontos fora de controle. É de se esperar que o processo não seja bem medido e tais dados façam com que as cartas tornem-se, frequentemente, errôneas.
 
-```{r eval=FALSE, include=FALSE}
-# scatter plot
-
-lag.plot(serie, do.lines = F, pch = 16)
-
-```
-
-
 ### Série temporal
 
 ```{r}
@@ -351,6 +343,7 @@ Verificando a presença de autocorrelação entre as observações da série not
 ```{r}
 par(bg='gray')
 acf(d1$media_mensal, main = "Correlação entre as médias mensais")
+
 ```
 
 
@@ -375,15 +368,20 @@ subset(mods, p_valor > 5/100 & p_estac < 5/100 & p_ind > 5/100)
 
 Outros modelos que também apresentaram todos pressupostos.
 
-```{r include=FALSE}
-# Ajustando os SARIMA tbm
-modelos = read.table(modelos_sarima)
+```{r explorando sarimas, include=FALSE}
+# A quem interessar possa, os SARIMA tbm
+modelos = read.table('escrita_.csv')
 
 colnames(modelos) <- c('x', 'p', 'd', 'q','P', 'D', 'Q', 'p_valor', 'p_estac',
                      'p_ind', 'AIC.model')
+# Retirando inútil
+modelos <- modelos[, -1]
 
 bons = subset(modelos, p_valor > 5/100 & p_estac < 5/100 & p_ind > 5/100)
 head(bons[order(bons$AIC.model), ])
+
+# O escolhido
+modelos[9505,]
 
 ```
 
