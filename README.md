@@ -24,7 +24,7 @@ para uso!
 
 ![alt text](gif_git.gif "")
 
-![alt text](https://github.com/doriedson-r/IC/blob/main/gif_git.gif?raw=true)
+<!--- ![alt text](https://github.com/doriedson-r/IC/blob/main/gif_git.gif?raw=true) --->
 
 ###### 2.1 Para usuários com git
 
