@@ -22,5 +22,20 @@ para uso!
 
 ##### 2.Execução no RStudio local:
 
+###### 2.1 Para usuários com git
+
+- Copie a URL deste repositório (https://github.com/doriedson-r/IC);
+
+- Abra o terminal (ou o prompt de comando) e navegue até o diretório onde você salvará o projeto;
+
+- Clone o repositório com o código `git clone https://github.com/doriedson-r/IC`;
+
+- Após baixados, os arquivos estarão prontos para uso.
+
+###### 2.2 Para qualquer usário
+
 - Baixe o arquivo .zip do repositório GitHub;
+
+- Extraia os arquivos para um diretório de sua escolha e eles estarão prontos para uso.
+
 

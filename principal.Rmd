@@ -30,6 +30,36 @@ source('abrev.R')
 
 ```
 
+```{r Preliminar, eval=FALSE, include=TRUE}
+# Essa parte serve apenas para verificação dos quantitativos de postos, observações,
+# entre outros valores que possam ser de interesse ao leitor.
+
+rm(list=ls())
+arquivos <- list.files("Dados", pattern = "*.csv", full.names = TRUE)
+
+dados <- list()
+for (i in seq_along(arquivos)) {
+  dados[[i]] <- read.csv(arquivos[i], sep=';')
+  
+  dados_selecionados = subset(dados[[i]],
+                              dados[[i]]$Municipio == 'GOIANIA' &
+                              dados[[i]]$Produto == 'GASOLINA')
+  
+  dados[[i]] <- dados_selecionados
+}
+
+dados_combinados <- do.call(rbind, dados)
+
+# Selecionando as variáveis de interesse
+dados_combinados <- dados_combinados[, c(4, 11, 12, 13)]
+
+# Autopostos com mais observações no conjunto de dados:
+aux = as.data.frame(table(dados_combinados$Revenda))
+head(aux[order(aux$Freq, decreasing=T), ])
+
+```
+
+
 ```{r Dados (importação), include=FALSE}
 rm(list=ls())
 arquivos <- list.files("Dados", pattern = "*.csv", full.names = TRUE)
@@ -38,7 +68,7 @@ dados <- list()
 for (i in seq_along(arquivos)) {
   dados[[i]] <- read.csv(arquivos[i], sep=';')
   
-  # Por questões de otimização do uso da memória,
+  # Por questões de otimização do uso da memória (rstudio na nuvem),
   # será feita a seleção junto da importação.
   dados_selecionados = subset(dados[[i]],
                               dados[[i]]$Municipio == 'GOIANIA' &
@@ -62,10 +92,9 @@ rm(dados_combinados, dados)
 
 
 ```{r Funções, echo=FALSE}
-# Fazer as modificações para atender o sarima
-
-# Função p/ checar normalidade dos resíduos
 check_normality <- function(residuals) {
+  # Função p/ checar normalidade dos resíduos
+
   shapiro_test <- shapiro.test(residuals)
   p_value <- shapiro_test$p.value
   return(p_value > 0.05)
@@ -110,7 +139,7 @@ modelando = function(data, p_values=c(0:5), d_values=c(0:3), q_values=c(0:5),
             best_aic <- AIC(model)
           }
         }, error = function(e) {
-          # Handle errors gracefully, e.g., print a warning message
+          # Lida com erros
           warning("Error fitting ARIMA(", p, ", ", d, ", ", q, "): ", e$message)
         })
             }
@@ -506,6 +535,8 @@ plotly::ggplotly(gg1)
 ```
 
 #### Adicionais
+
+Gráficos utilizados no relatório.
 
 ```{r amplitude trimestre}
 
