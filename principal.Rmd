@@ -30,9 +30,10 @@ source('abrev.R')
 
 ```
 
-```{r Preliminar, eval=FALSE, include=TRUE}
+```{r Preliminar, eval=FALSE, include=FALSE}
 # Essa parte serve apenas para verificação dos quantitativos de postos, observações,
-# entre outros valores que possam ser de interesse ao leitor.
+# entre outros valores que possam ser de interesse ao leitor. É visível apenas
+# no código fonte e precisa ser executada manualmente.
 
 rm(list=ls())
 arquivos <- list.files("Dados", pattern = "*.csv", full.names = TRUE)
