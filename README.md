@@ -22,7 +22,7 @@ para uso!
 
 ##### 2.Execução no RStudio local:
 
-![alt text](gif_git.gif "")
+![alt text](gif_git.gif "Como baixar o arquivo zip")
 
 ###### 2.1 Para usuários com git
 
