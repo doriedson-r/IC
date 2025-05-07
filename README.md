@@ -24,6 +24,8 @@ para uso!
 
 ![alt text](gif_git.gif "Como baixar o arquivo zip")
 
+<!--- ![alt text](https://github.com/doriedson-r/IC/blob/main/gif_git.gif?raw=true) --->
+
 ###### 2.1 Para usuários com git
 
 - Abra o terminal (ou o prompt de comando) e navegue até o diretório onde você salvará o projeto;
