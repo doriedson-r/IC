@@ -6,7 +6,7 @@ O conjunto de dados foi retirado do portal de dados abertos (Governo Federal):
 https://dados.gov.br/dados/conjuntos-dados/serie-historica-de-precos-de-combustiveis-e-de-glp
 
 Você pode visualizar o conjunto de dados no seguinte painel:
-https://app.powerbi.com/view?r=eyJrIjoiZTliNWJkMjEtODNhMy00ZjM4LTg3ZjktOTA0ZDQxMGFiZGFlIiwidCI6ImIxY2E3YTgxLWFiZjgtNDJlNS05OGM2LWYyZjJhOTMwYmEzNiJ9
+[![Link painel externo](dados.png)](https://app.powerbi.com/view?r=eyJrIjoiZTliNWJkMjEtODNhMy00ZjM4LTg3ZjktOTA0ZDQxMGFiZGFlIiwidCI6ImIxY2E3YTgxLWFiZjgtNDJlNS05OGM2LWYyZjJhOTMwYmEzNiJ9)
 
 #### Tutorial
 
