@@ -8,8 +8,6 @@ https://dados.gov.br/dados/conjuntos-dados/serie-historica-de-precos-de-combusti
 Você pode visualizar o conjunto de dados no seguinte painel:
 https://app.powerbi.com/view?r=eyJrIjoiZTliNWJkMjEtODNhMy00ZjM4LTg3ZjktOTA0ZDQxMGFiZGFlIiwidCI6ImIxY2E3YTgxLWFiZjgtNDJlNS05OGM2LWYyZjJhOTMwYmEzNiJ9
 
-<iframe title="Postos_e_precos" width="600" height="373.5" src="https://app.powerbi.com/view?r=eyJrIjoiZTliNWJkMjEtODNhMy00ZjM4LTg3ZjktOTA0ZDQxMGFiZGFlIiwidCI6ImIxY2E3YTgxLWFiZjgtNDJlNS05OGM2LWYyZjJhOTMwYmEzNiJ9" frameborder="0" allowFullScreen="true"></iframe>
-
 #### Tutorial
 
 ##### 1.Execução do código em um ambiente do RStudio na nuvem:
